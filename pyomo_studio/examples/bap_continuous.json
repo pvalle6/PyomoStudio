@@ -1,0 +1,501 @@
+{
+  "version": 1,
+  "name": "Berth Allocation Problem - continuous quay",
+  "description": "Eight vessels share a 600 m quay. Each vessel takes a section of quay equal to its length. Handling is slower when a vessel berths far from its preferred position (far from its stack area). Rectangles in the time-space plan must not overlap.",
+  "sets": [
+    {
+      "name": "V",
+      "kind": "list",
+      "elements": [
+        "C1",
+        "C2",
+        "C3",
+        "C4",
+        "C5",
+        "C6",
+        "C7",
+        "C8"
+      ],
+      "start": 1,
+      "stop": 1,
+      "step": 1,
+      "expr": "",
+      "dimen": 1,
+      "description": "Vessels"
+    },
+    {
+      "name": "PAIRS",
+      "kind": "expression",
+      "elements": [],
+      "start": 1,
+      "stop": 1,
+      "step": 1,
+      "expr": "[(u, v) for u in V for v in V if u != v]",
+      "dimen": 1,
+      "description": ""
+    }
+  ],
+  "params": [
+    {
+      "name": "L",
+      "index": "",
+      "value": 600,
+      "default": 0.0,
+      "values": [],
+      "formula": "",
+      "description": "Quay length (m)"
+    },
+    {
+      "name": "len_",
+      "index": "v in V",
+      "value": 0.0,
+      "default": 0.0,
+      "values": [
+        [
+          "C1",
+          180
+        ],
+        [
+          "C2",
+          240
+        ],
+        [
+          "C3",
+          150
+        ],
+        [
+          "C4",
+          300
+        ],
+        [
+          "C5",
+          120
+        ],
+        [
+          "C6",
+          210
+        ],
+        [
+          "C7",
+          160
+        ],
+        [
+          "C8",
+          260
+        ]
+      ],
+      "formula": "",
+      "description": "Vessel length incl. clearance (m)"
+    },
+    {
+      "name": "pref",
+      "index": "v in V",
+      "value": 0.0,
+      "default": 0.0,
+      "values": [
+        [
+          "C1",
+          0
+        ],
+        [
+          "C2",
+          200
+        ],
+        [
+          "C3",
+          420
+        ],
+        [
+          "C4",
+          60
+        ],
+        [
+          "C5",
+          460
+        ],
+        [
+          "C6",
+          300
+        ],
+        [
+          "C7",
+          30
+        ],
+        [
+          "C8",
+          340
+        ]
+      ],
+      "formula": "",
+      "description": "Preferred quay position (m)"
+    },
+    {
+      "name": "a",
+      "index": "v in V",
+      "value": 0.0,
+      "default": 0.0,
+      "values": [
+        [
+          "C1",
+          0
+        ],
+        [
+          "C2",
+          2
+        ],
+        [
+          "C3",
+          5
+        ],
+        [
+          "C4",
+          8
+        ],
+        [
+          "C5",
+          12
+        ],
+        [
+          "C6",
+          16
+        ],
+        [
+          "C7",
+          20
+        ],
+        [
+          "C8",
+          24
+        ]
+      ],
+      "formula": "",
+      "description": "Arrival (h)"
+    },
+    {
+      "name": "h",
+      "index": "v in V",
+      "value": 0.0,
+      "default": 0.0,
+      "values": [
+        [
+          "C1",
+          12
+        ],
+        [
+          "C2",
+          16
+        ],
+        [
+          "C3",
+          8
+        ],
+        [
+          "C4",
+          20
+        ],
+        [
+          "C5",
+          6
+        ],
+        [
+          "C6",
+          14
+        ],
+        [
+          "C7",
+          9
+        ],
+        [
+          "C8",
+          18
+        ]
+      ],
+      "formula": "",
+      "description": "Handling time at the preferred position (h)"
+    },
+    {
+      "name": "d",
+      "index": "v in V",
+      "value": 0.0,
+      "default": 0.0,
+      "values": [
+        [
+          "C1",
+          18
+        ],
+        [
+          "C2",
+          24
+        ],
+        [
+          "C3",
+          18
+        ],
+        [
+          "C4",
+          36
+        ],
+        [
+          "C5",
+          24
+        ],
+        [
+          "C6",
+          38
+        ],
+        [
+          "C7",
+          35
+        ],
+        [
+          "C8",
+          52
+        ]
+      ],
+      "formula": "",
+      "description": "Requested departure (h)"
+    },
+    {
+      "name": "w",
+      "index": "v in V",
+      "value": 0.0,
+      "default": 0.0,
+      "values": [
+        [
+          "C1",
+          2
+        ],
+        [
+          "C2",
+          3
+        ],
+        [
+          "C3",
+          1
+        ],
+        [
+          "C4",
+          3
+        ],
+        [
+          "C5",
+          1
+        ],
+        [
+          "C6",
+          2
+        ],
+        [
+          "C7",
+          1
+        ],
+        [
+          "C8",
+          3
+        ]
+      ],
+      "formula": "",
+      "description": "Priority weight"
+    },
+    {
+      "name": "beta",
+      "index": "",
+      "value": 0.5,
+      "default": 0.0,
+      "values": [],
+      "formula": "",
+      "description": "Extra handling time at full-quay distance (fraction)"
+    },
+    {
+      "name": "M",
+      "index": "",
+      "value": 200,
+      "default": 0.0,
+      "values": [],
+      "formula": "",
+      "description": "Big-M for time (h)"
+    },
+    {
+      "name": "lam",
+      "index": "",
+      "value": 5,
+      "default": 0.0,
+      "values": [],
+      "formula": "",
+      "description": "Penalty per weighted hour late"
+    }
+  ],
+  "variables": [
+    {
+      "name": "pos",
+      "index": "v in V",
+      "domain": "NonNegativeReals",
+      "lb": "",
+      "ub": "L - len_[v]",
+      "init": "",
+      "stage": 2,
+      "description": "Quay position of the vessel bow (m)"
+    },
+    {
+      "name": "t",
+      "index": "v in V",
+      "domain": "NonNegativeReals",
+      "lb": "a[v]",
+      "ub": "",
+      "init": "",
+      "stage": 2,
+      "description": "Start of handling (h)"
+    },
+    {
+      "name": "dev",
+      "index": "v in V",
+      "domain": "NonNegativeReals",
+      "lb": "",
+      "ub": "",
+      "init": "",
+      "stage": 2,
+      "description": "Distance from the preferred position (m)"
+    },
+    {
+      "name": "T",
+      "index": "v in V",
+      "domain": "NonNegativeReals",
+      "lb": "",
+      "ub": "",
+      "init": "",
+      "stage": 2,
+      "description": "Late departure (h)"
+    },
+    {
+      "name": "left",
+      "index": "(u, v) in PAIRS",
+      "domain": "Binary",
+      "lb": "",
+      "ub": "",
+      "init": "",
+      "stage": 2,
+      "description": "1 if u is fully left of v on the quay"
+    },
+    {
+      "name": "before",
+      "index": "(u, v) in PAIRS",
+      "domain": "Binary",
+      "lb": "",
+      "ub": "",
+      "init": "",
+      "stage": 2,
+      "description": "1 if u departs before v starts"
+    }
+  ],
+  "expressions": [
+    {
+      "name": "hh",
+      "index": "v in V",
+      "expr": "h[v] * (1 + beta * dev[v] / L)",
+      "description": "Handling time with the distance penalty"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "DevRight",
+      "index": "v in V",
+      "condition": "",
+      "expr": "dev[v] >= pos[v] - pref[v]",
+      "active": true,
+      "description": ""
+    },
+    {
+      "name": "DevLeft",
+      "index": "v in V",
+      "condition": "",
+      "expr": "dev[v] >= pref[v] - pos[v]",
+      "active": true,
+      "description": ""
+    },
+    {
+      "name": "Space",
+      "index": "(u, v) in PAIRS",
+      "condition": "",
+      "expr": "pos[u] + len_[u] <= pos[v] + L * (1 - left[u, v])",
+      "active": true,
+      "description": ""
+    },
+    {
+      "name": "Time",
+      "index": "(u, v) in PAIRS",
+      "condition": "",
+      "expr": "t[u] + hh[u] <= t[v] + M * (1 - before[u, v])",
+      "active": true,
+      "description": ""
+    },
+    {
+      "name": "Separate",
+      "index": "(u, v) in PAIRS",
+      "condition": "u < v",
+      "expr": "left[u, v] + left[v, u] + before[u, v] + before[v, u] >= 1",
+      "active": true,
+      "description": "Two vessels are apart in space or in time"
+    },
+    {
+      "name": "Late",
+      "index": "v in V",
+      "condition": "",
+      "expr": "T[v] >= t[v] + hh[v] - d[v]",
+      "active": true,
+      "description": ""
+    }
+  ],
+  "objectives": [
+    {
+      "name": "Cost",
+      "sense": "minimize",
+      "expr": "sum(w[v] * (t[v] + hh[v] - a[v]) for v in V) + lam * sum(w[v] * T[v] for v in V)",
+      "active": true,
+      "description": ""
+    },
+    {
+      "name": "TotalDistance",
+      "sense": "minimize",
+      "expr": "sum(dev[v] for v in V)",
+      "active": false,
+      "description": "KPI (m)"
+    }
+  ],
+  "stochastic": {
+    "enabled": false,
+    "scenarios": [],
+    "risk": {
+      "measure": "expected",
+      "alpha": 0.9,
+      "weight": 0.0
+    }
+  },
+  "schedule": {
+    "type": "space_time",
+    "tasks": "v in V",
+    "condition": "",
+    "label": "v",
+    "resource": "'Quay'",
+    "start": "t[v]",
+    "duration": "hh[v]",
+    "release": "a[v]",
+    "due": "d[v]",
+    "position": "pos[v]",
+    "size": "len_[v]",
+    "space_label": "Quay position (m)",
+    "space_max": "L",
+    "time_unit": "h",
+    "time_origin": "2026-11-16 06:00",
+    "wait_warning": "4",
+    "late_tolerance": "0.001"
+  },
+  "solver": {
+    "name": "appsi_highs",
+    "time_limit": 120,
+    "mip_gap": 0.0,
+    "tee": true,
+    "duals": false,
+    "options": ""
+  },
+  "hook": ""
+}

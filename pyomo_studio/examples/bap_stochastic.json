@@ -1,0 +1,805 @@
+{
+  "version": 1,
+  "name": "Berth Allocation Problem - stochastic arrivals",
+  "description": "The discrete berth plan with uncertain arrivals and handling times. First stage (here and now): berth and sequence of each vessel. Second stage (wait and see): start times and late departure in each scenario.",
+  "sets": [
+    {
+      "name": "V",
+      "kind": "list",
+      "elements": [
+        "V01",
+        "V02",
+        "V03",
+        "V04",
+        "V05",
+        "V06",
+        "V07",
+        "V08",
+        "V09",
+        "V10"
+      ],
+      "start": 1,
+      "stop": 1,
+      "step": 1,
+      "expr": "",
+      "dimen": 1,
+      "description": "Vessels"
+    },
+    {
+      "name": "B",
+      "kind": "list",
+      "elements": [
+        "B1",
+        "B2",
+        "B3"
+      ],
+      "start": 1,
+      "stop": 1,
+      "step": 1,
+      "expr": "",
+      "dimen": 1,
+      "description": "Berths"
+    },
+    {
+      "name": "PAIRS",
+      "kind": "expression",
+      "elements": [],
+      "start": 1,
+      "stop": 1,
+      "step": 1,
+      "expr": "[(u, v) for u in V for v in V if u != v]",
+      "dimen": 1,
+      "description": "Ordered pairs of different vessels"
+    }
+  ],
+  "params": [
+    {
+      "name": "a",
+      "index": "v in V",
+      "value": 0.0,
+      "default": 0.0,
+      "values": [
+        [
+          "V01",
+          0
+        ],
+        [
+          "V02",
+          2
+        ],
+        [
+          "V03",
+          4
+        ],
+        [
+          "V04",
+          7
+        ],
+        [
+          "V05",
+          10
+        ],
+        [
+          "V06",
+          12
+        ],
+        [
+          "V07",
+          15
+        ],
+        [
+          "V08",
+          18
+        ],
+        [
+          "V09",
+          21
+        ],
+        [
+          "V10",
+          24
+        ]
+      ],
+      "formula": "",
+      "description": "Arrival time (h)"
+    },
+    {
+      "name": "d",
+      "index": "v in V",
+      "value": 0.0,
+      "default": 0.0,
+      "values": [
+        [
+          "V01",
+          14
+        ],
+        [
+          "V02",
+          11
+        ],
+        [
+          "V03",
+          16
+        ],
+        [
+          "V04",
+          16
+        ],
+        [
+          "V05",
+          26
+        ],
+        [
+          "V06",
+          23
+        ],
+        [
+          "V07",
+          22
+        ],
+        [
+          "V08",
+          31
+        ],
+        [
+          "V09",
+          30
+        ],
+        [
+          "V10",
+          32
+        ]
+      ],
+      "formula": "",
+      "description": "Requested departure (h)"
+    },
+    {
+      "name": "w",
+      "index": "v in V",
+      "value": 0.0,
+      "default": 0.0,
+      "values": [
+        [
+          "V01",
+          2
+        ],
+        [
+          "V02",
+          1
+        ],
+        [
+          "V03",
+          3
+        ],
+        [
+          "V04",
+          1
+        ],
+        [
+          "V05",
+          2
+        ],
+        [
+          "V06",
+          1
+        ],
+        [
+          "V07",
+          2
+        ],
+        [
+          "V08",
+          3
+        ],
+        [
+          "V09",
+          1
+        ],
+        [
+          "V10",
+          2
+        ]
+      ],
+      "formula": "",
+      "description": "Priority weight"
+    },
+    {
+      "name": "p",
+      "index": "v in V, b in B",
+      "value": 0.0,
+      "default": 0.0,
+      "values": [
+        [
+          "V01",
+          "B1",
+          10.0
+        ],
+        [
+          "V01",
+          "B2",
+          11.5
+        ],
+        [
+          "V01",
+          "B3",
+          13.5
+        ],
+        [
+          "V02",
+          "B1",
+          6.0
+        ],
+        [
+          "V02",
+          "B2",
+          7.0
+        ],
+        [
+          "V02",
+          "B3",
+          8.0
+        ],
+        [
+          "V03",
+          "B1",
+          8.0
+        ],
+        [
+          "V03",
+          "B2",
+          9.0
+        ],
+        [
+          "V03",
+          "B3",
+          11.0
+        ],
+        [
+          "V04",
+          "B1",
+          5.0
+        ],
+        [
+          "V04",
+          "B2",
+          6.0
+        ],
+        [
+          "V04",
+          "B3",
+          7.0
+        ],
+        [
+          "V05",
+          "B1",
+          12.0
+        ],
+        [
+          "V05",
+          "B2",
+          14.0
+        ],
+        [
+          "V05",
+          "B3",
+          16.0
+        ],
+        [
+          "V06",
+          "B1",
+          7.0
+        ],
+        [
+          "V06",
+          "B2",
+          8.0
+        ],
+        [
+          "V06",
+          "B3",
+          9.5
+        ],
+        [
+          "V07",
+          "B1",
+          4.0
+        ],
+        [
+          "V07",
+          "B2",
+          4.5
+        ],
+        [
+          "V07",
+          "B3",
+          5.5
+        ],
+        [
+          "V08",
+          "B1",
+          9.0
+        ],
+        [
+          "V08",
+          "B2",
+          10.5
+        ],
+        [
+          "V08",
+          "B3",
+          12.0
+        ],
+        [
+          "V09",
+          "B1",
+          6.0
+        ],
+        [
+          "V09",
+          "B2",
+          7.0
+        ],
+        [
+          "V09",
+          "B3",
+          8.0
+        ],
+        [
+          "V10",
+          "B1",
+          5.0
+        ],
+        [
+          "V10",
+          "B2",
+          6.0
+        ],
+        [
+          "V10",
+          "B3",
+          7.0
+        ]
+      ],
+      "formula": "",
+      "description": "Handling time of vessel v at berth b (h)"
+    },
+    {
+      "name": "ok",
+      "index": "v in V, b in B",
+      "value": 0.0,
+      "default": 1,
+      "values": [
+        [
+          "V01",
+          "B1",
+          1
+        ],
+        [
+          "V01",
+          "B2",
+          1
+        ],
+        [
+          "V01",
+          "B3",
+          0
+        ],
+        [
+          "V02",
+          "B1",
+          1
+        ],
+        [
+          "V02",
+          "B2",
+          1
+        ],
+        [
+          "V02",
+          "B3",
+          1
+        ],
+        [
+          "V03",
+          "B1",
+          1
+        ],
+        [
+          "V03",
+          "B2",
+          1
+        ],
+        [
+          "V03",
+          "B3",
+          0
+        ],
+        [
+          "V04",
+          "B1",
+          1
+        ],
+        [
+          "V04",
+          "B2",
+          1
+        ],
+        [
+          "V04",
+          "B3",
+          1
+        ],
+        [
+          "V05",
+          "B1",
+          1
+        ],
+        [
+          "V05",
+          "B2",
+          1
+        ],
+        [
+          "V05",
+          "B3",
+          0
+        ],
+        [
+          "V06",
+          "B1",
+          1
+        ],
+        [
+          "V06",
+          "B2",
+          1
+        ],
+        [
+          "V06",
+          "B3",
+          1
+        ],
+        [
+          "V07",
+          "B1",
+          1
+        ],
+        [
+          "V07",
+          "B2",
+          1
+        ],
+        [
+          "V07",
+          "B3",
+          1
+        ],
+        [
+          "V08",
+          "B1",
+          1
+        ],
+        [
+          "V08",
+          "B2",
+          1
+        ],
+        [
+          "V08",
+          "B3",
+          0
+        ],
+        [
+          "V09",
+          "B1",
+          1
+        ],
+        [
+          "V09",
+          "B2",
+          1
+        ],
+        [
+          "V09",
+          "B3",
+          1
+        ],
+        [
+          "V10",
+          "B1",
+          1
+        ],
+        [
+          "V10",
+          "B2",
+          1
+        ],
+        [
+          "V10",
+          "B3",
+          1
+        ]
+      ],
+      "formula": "",
+      "description": "1 if vessel v can use berth b"
+    },
+    {
+      "name": "s",
+      "index": "b in B",
+      "value": 0.0,
+      "default": 0.0,
+      "values": [
+        [
+          "B1",
+          0
+        ],
+        [
+          "B2",
+          0
+        ],
+        [
+          "B3",
+          4
+        ]
+      ],
+      "formula": "",
+      "description": "Berth opening time (h)"
+    },
+    {
+      "name": "Wmax",
+      "index": "",
+      "value": 20,
+      "default": 0.0,
+      "values": [],
+      "formula": "",
+      "description": "Longest wait allowed (h). It also makes the big-M values small."
+    },
+    {
+      "name": "lam",
+      "index": "",
+      "value": 5,
+      "default": 0.0,
+      "values": [],
+      "formula": "",
+      "description": "Penalty per weighted hour of late departure"
+    }
+  ],
+  "variables": [
+    {
+      "name": "x",
+      "index": "v in V, b in B",
+      "domain": "Binary",
+      "lb": "",
+      "ub": "",
+      "init": "",
+      "stage": 1,
+      "description": "1 if vessel v uses berth b"
+    },
+    {
+      "name": "y",
+      "index": "(u, v) in PAIRS",
+      "domain": "Binary",
+      "lb": "",
+      "ub": "",
+      "init": "",
+      "stage": 1,
+      "description": "1 if u is served before v (on the same berth)"
+    },
+    {
+      "name": "t",
+      "index": "v in V",
+      "domain": "NonNegativeReals",
+      "lb": "a[v]",
+      "ub": "a[v] + Wmax",
+      "init": "",
+      "stage": 2,
+      "description": "Start of handling (h)"
+    },
+    {
+      "name": "T",
+      "index": "v in V",
+      "domain": "NonNegativeReals",
+      "lb": "",
+      "ub": "",
+      "init": "",
+      "stage": 2,
+      "description": "Late departure (h)"
+    }
+  ],
+  "expressions": [
+    {
+      "name": "hand",
+      "index": "v in V",
+      "expr": "sum(p[v, b] * x[v, b] for b in B)",
+      "description": "Handling time of v"
+    },
+    {
+      "name": "dep",
+      "index": "v in V",
+      "expr": "t[v] + hand[v]",
+      "description": "Departure time of v"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "Assign",
+      "index": "v in V",
+      "condition": "",
+      "expr": "sum(x[v, b] for b in B) == 1",
+      "active": true,
+      "description": "Each vessel uses one berth"
+    },
+    {
+      "name": "Compatible",
+      "index": "v in V, b in B",
+      "condition": "ok[v, b] == 0",
+      "expr": "x[v, b] == 0",
+      "active": true,
+      "description": "No vessel at a berth that it cannot use"
+    },
+    {
+      "name": "Order",
+      "index": "(u, v) in PAIRS",
+      "condition": "u < v",
+      "expr": "y[u, v] + y[v, u] == 1",
+      "active": true,
+      "description": "One of each two vessels goes first"
+    },
+    {
+      "name": "NoOverlap",
+      "index": "(u, v) in PAIRS, b in B",
+      "condition": "ok[u, b] == 1 and ok[v, b] == 1",
+      "expr": "t[u] + p[u, b] <= t[v] + max(0, a[u] + Wmax + p[u, b] - a[v]) * (3 - x[u, b] - x[v, b] - y[u, v])",
+      "active": true,
+      "description": "Two vessels at one berth do not overlap. The big-M is the largest possible overlap of the pair."
+    },
+    {
+      "name": "BerthOpen",
+      "index": "v in V, b in B",
+      "condition": "s[b] > 0",
+      "expr": "t[v] >= s[b] * x[v, b]",
+      "active": true,
+      "description": "No start before the berth opens"
+    },
+    {
+      "name": "Late",
+      "index": "v in V",
+      "condition": "",
+      "expr": "T[v] >= dep[v] - d[v]",
+      "active": true,
+      "description": "Late departure"
+    }
+  ],
+  "objectives": [
+    {
+      "name": "Cost",
+      "sense": "minimize",
+      "expr": "sum(w[v] * (dep[v] - a[v]) for v in V) + lam * sum(w[v] * T[v] for v in V)",
+      "active": true,
+      "description": "Weighted time in port + penalty for late departure"
+    },
+    {
+      "name": "TotalWait",
+      "sense": "minimize",
+      "expr": "sum(t[v] - a[v] for v in V)",
+      "active": false,
+      "description": "KPI: total wait (h)"
+    },
+    {
+      "name": "TotalLate",
+      "sense": "minimize",
+      "expr": "sum(T[v] for v in V)",
+      "active": false,
+      "description": "KPI: total late departure (h)"
+    }
+  ],
+  "stochastic": {
+    "enabled": true,
+    "risk": {
+      "measure": "expected",
+      "alpha": 0.8,
+      "weight": 0.0
+    },
+    "scenarios": [
+      {
+        "name": "Calm",
+        "probability": 0.5,
+        "changes": []
+      },
+      {
+        "name": "Delays",
+        "probability": 0.3,
+        "changes": [
+          {
+            "param": "a",
+            "index": "V03",
+            "op": "add",
+            "value": 4
+          },
+          {
+            "param": "a",
+            "index": "V05",
+            "op": "add",
+            "value": 6
+          },
+          {
+            "param": "a",
+            "index": "V08",
+            "op": "add",
+            "value": 3
+          },
+          {
+            "param": "p",
+            "index": "",
+            "op": "scale",
+            "value": 1.1
+          }
+        ]
+      },
+      {
+        "name": "Storm",
+        "probability": 0.2,
+        "changes": [
+          {
+            "param": "a",
+            "index": "V01",
+            "op": "add",
+            "value": 3
+          },
+          {
+            "param": "a",
+            "index": "V05",
+            "op": "add",
+            "value": 10
+          },
+          {
+            "param": "a",
+            "index": "V08",
+            "op": "add",
+            "value": 8
+          },
+          {
+            "param": "a",
+            "index": "V10",
+            "op": "add",
+            "value": 6
+          },
+          {
+            "param": "p",
+            "index": "",
+            "op": "scale",
+            "value": 1.25
+          }
+        ]
+      }
+    ]
+  },
+  "schedule": {
+    "type": "gantt",
+    "tasks": "v in V",
+    "condition": "",
+    "label": "v",
+    "resource": "which(x, v)",
+    "start": "t[v]",
+    "duration": "hand[v]",
+    "release": "a[v]",
+    "due": "d[v]",
+    "position": "",
+    "size": "",
+    "space_label": "Position",
+    "space_max": "",
+    "time_unit": "h",
+    "time_origin": "2026-11-16 06:00",
+    "wait_warning": "3",
+    "late_tolerance": "0.001"
+  },
+  "solver": {
+    "name": "appsi_highs",
+    "time_limit": 60,
+    "mip_gap": 0.0,
+    "tee": true,
+    "duals": false,
+    "options": ""
+  },
+  "hook": ""
+}

@@ -1,0 +1,229 @@
+{
+  "version": 1,
+  "name": "Production planning (LP)",
+  "description": "A plant makes three products with limited machine hours and labor. Find the mix with the most profit. Use the duals to see the value of one more hour of each resource.",
+  "sets": [
+    {
+      "name": "P",
+      "kind": "list",
+      "elements": [
+        "Bench",
+        "Chair",
+        "Table"
+      ],
+      "start": 1,
+      "stop": 1,
+      "step": 1,
+      "expr": "",
+      "dimen": 1,
+      "description": "Products"
+    },
+    {
+      "name": "R",
+      "kind": "list",
+      "elements": [
+        "Machining",
+        "Assembly",
+        "Finishing"
+      ],
+      "start": 1,
+      "stop": 1,
+      "step": 1,
+      "expr": "",
+      "dimen": 1,
+      "description": "Resources"
+    }
+  ],
+  "params": [
+    {
+      "name": "profit",
+      "index": "i in P",
+      "value": 0.0,
+      "default": 0.0,
+      "values": [
+        [
+          "Bench",
+          45
+        ],
+        [
+          "Chair",
+          30
+        ],
+        [
+          "Table",
+          80
+        ]
+      ],
+      "formula": "",
+      "description": "Profit per unit ($)"
+    },
+    {
+      "name": "cap",
+      "index": "r in R",
+      "value": 0.0,
+      "default": 0.0,
+      "values": [
+        [
+          "Machining",
+          240
+        ],
+        [
+          "Assembly",
+          200
+        ],
+        [
+          "Finishing",
+          180
+        ]
+      ],
+      "formula": "",
+      "description": "Hours available per week"
+    },
+    {
+      "name": "use",
+      "index": "i in P, r in R",
+      "value": 0.0,
+      "default": 0.0,
+      "values": [
+        [
+          "Bench",
+          "Machining",
+          2
+        ],
+        [
+          "Bench",
+          "Assembly",
+          1
+        ],
+        [
+          "Bench",
+          "Finishing",
+          1
+        ],
+        [
+          "Chair",
+          "Machining",
+          1
+        ],
+        [
+          "Chair",
+          "Assembly",
+          2
+        ],
+        [
+          "Chair",
+          "Finishing",
+          1
+        ],
+        [
+          "Table",
+          "Machining",
+          3
+        ],
+        [
+          "Table",
+          "Assembly",
+          2
+        ],
+        [
+          "Table",
+          "Finishing",
+          3
+        ]
+      ],
+      "formula": "",
+      "description": "Hours per unit"
+    },
+    {
+      "name": "demand",
+      "index": "i in P",
+      "value": 0.0,
+      "default": 0.0,
+      "values": [
+        [
+          "Bench",
+          60
+        ],
+        [
+          "Chair",
+          80
+        ],
+        [
+          "Table",
+          40
+        ]
+      ],
+      "formula": "",
+      "description": "Most units that the market takes"
+    }
+  ],
+  "variables": [
+    {
+      "name": "make",
+      "index": "i in P",
+      "domain": "NonNegativeReals",
+      "lb": "",
+      "ub": "demand[i]",
+      "init": "",
+      "stage": 2,
+      "description": "Units to make"
+    }
+  ],
+  "expressions": [],
+  "constraints": [
+    {
+      "name": "Capacity",
+      "index": "r in R",
+      "condition": "",
+      "expr": "sum(use[i, r] * make[i] for i in P) <= cap[r]",
+      "active": true,
+      "description": "Resource hours"
+    }
+  ],
+  "objectives": [
+    {
+      "name": "Profit",
+      "sense": "maximize",
+      "expr": "sum(profit[i] * make[i] for i in P)",
+      "active": true,
+      "description": ""
+    }
+  ],
+  "stochastic": {
+    "enabled": false,
+    "scenarios": [],
+    "risk": {
+      "measure": "expected",
+      "alpha": 0.9,
+      "weight": 0.0
+    }
+  },
+  "schedule": {
+    "type": "none",
+    "tasks": "",
+    "condition": "",
+    "label": "",
+    "resource": "",
+    "start": "",
+    "duration": "",
+    "release": "",
+    "due": "",
+    "position": "",
+    "size": "",
+    "space_label": "Position",
+    "space_max": "",
+    "time_unit": "h",
+    "time_origin": "",
+    "wait_warning": "",
+    "late_tolerance": "0.001"
+  },
+  "solver": {
+    "name": "appsi_highs",
+    "time_limit": 60.0,
+    "mip_gap": 0.0001,
+    "tee": true,
+    "duals": true,
+    "options": ""
+  },
+  "hook": ""
+}

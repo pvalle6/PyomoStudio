@@ -1,0 +1,3 @@
+pyomo>=6.7
+highspy>=1.7
+PySide6>=6.6
