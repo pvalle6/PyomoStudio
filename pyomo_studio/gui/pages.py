@@ -1038,7 +1038,12 @@ class SolvePage(QWidget):
         self.b_solve = button("Solve", "solve", accent=True)
         self.b_analyze = button("Stochastic analysis", "analyze",
                                 tip="Solve RP, WS, EV and EEV; calculate EVPI and VSS")
-        run.add(h_row(self.b_validate, self.b_build, self.b_solve, self.b_analyze))
+        self.b_stop = button("Stop", "close", tip="Stop the solve now (Esc)")
+        self.b_stop.setEnabled(False)
+        run.add(h_row(self.b_validate, self.b_build, self.b_solve, self.b_analyze, self.b_stop))
+        run.add(label("The solver runs in a separate process. The program stops it at the time limit plus a "
+                      "grace time (25 %, at least 10 s), because some solvers check their limit only "
+                      "between steps.", "caption", wrap=True))
         self.b_script = button("Export Pyomo script", "export")
         self.b_lp = button("Write LP / MPS / NL file", "export")
         run.add(h_row(self.b_script, self.b_lp))
@@ -1047,6 +1052,7 @@ class SolvePage(QWidget):
         self.b_build.clicked.connect(studio.build_only)
         self.b_solve.clicked.connect(studio.solve)
         self.b_analyze.clicked.connect(studio.analyze)
+        self.b_stop.clicked.connect(studio.stop)
         self.b_script.clicked.connect(studio.export_script)
         self.b_lp.clicked.connect(studio.write_model_file)
 
@@ -1114,6 +1120,7 @@ class SolvePage(QWidget):
     def set_busy(self, busy: bool):
         for b in (self.b_validate, self.b_build, self.b_solve, self.b_analyze, self.b_detect, self.b_lp):
             b.setEnabled(not busy)
+        self.b_stop.setEnabled(busy)
         if not busy:
             self.b_analyze.setEnabled(bool(self.studio.spec["stochastic"].get("enabled")))
 

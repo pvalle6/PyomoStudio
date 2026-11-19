@@ -22,10 +22,11 @@ On Windows you can also double-click `run_studio.bat`. You need Python 3.10 or l
 - **Stochastic programming**: scenarios as parameter changes (set, add or scale, for one index or all), first- and second-stage variables, the extensive form with non-anticipativity, mean-CVaR, and an analysis that reports RP, WS, EV, EEV, EVPI and VSS.
 - **Schedule view**: map any solution to tasks as a Gantt chart (resource rows) or a space-time chart (for example quay position). The graphic follows ISA-101: a gray background, gray bars, and color only for abnormal states (red priority-1 for late or overlap, amber priority-2 for long waits), each repeated as a symbol and text.
 - **Tank schematic**: an ISA-101 process graphic of the tank farm for each period (receipt, tank levels and modes, send-out, crude unit blend), inventory trends with heel and capacity, and high-level, heel, reject and shortage indicators. It is also in the HTML plan and in a CSV.
+- **Random models**: a seeded generator for crude terminal and refinery models (tiny to large presets, congestion, tank tightness, arrival-delay scenarios), in **Examples > Generate random model** and `python -m pyomo_studio generate`.
 - **Plans**: an HTML report (Fluent styling with the embedded schedule graphic), Markdown, schedule CSV, values CSV and results JSON.
 - **Export**: a standalone, readable Pyomo script; LP, MPS and NL model files.
 - **Advanced hook**: Python code that runs on each model block, for Pyomo features the forms do not cover (GDP, piecewise).
-- **Command line**: `python -m pyomo_studio solve model.json --analyze --report plan.html`.
+- **Command line**: `python -m pyomo_studio solve model.json --analyze --report plan.html`, `python -m pyomo_studio generate model.json --preset small --seed 7`.
 
 ## Interface
 
@@ -43,6 +44,7 @@ pyomo_studio/
   engine.py     Pyomo build, solve, extensive form, CVaR, EVPI/VSS analysis
   schedule.py   schedule view, ISA-101 layout, SVG
   inventory.py  tank inventory data, schematic and trend layout
+  generate.py   random crude terminal and refinery models
   report.py     HTML / Markdown / CSV / JSON plans
   codegen.py    standalone Pyomo script export
   layers/       switchable layers: framework, berth, tank farm, crude units, custom

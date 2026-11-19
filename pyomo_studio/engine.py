@@ -17,6 +17,7 @@ sources that you trust.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import io
 import logging
 import math
@@ -511,6 +512,10 @@ class SolverOptions:
     tee: bool = True
     duals: bool = False
     extra: dict = field(default_factory=dict)
+    # Run the solver in a child process that can be stopped. HiGHS and other solvers check
+    # their time limit only between search steps, so a solve can run far past the limit.
+    isolate: bool = True
+    grace: float | None = None       # seconds after the time limit before the hard stop
 
     @classmethod
     def from_spec(cls, d: dict) -> "SolverOptions":
@@ -622,6 +627,175 @@ class RunInfo:
     lower_bound: float | None = None
     upper_bound: float | None = None
     log: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Solve in a child process (hard time limit, user stop)
+# ---------------------------------------------------------------------------
+
+HARD_STOP = "hardStop"
+USER_STOP = "userStop"
+
+
+class Cancel:
+    """A flag that the interface sets to stop a running solve (thread-safe)."""
+
+    def __init__(self):
+        import threading
+        self._ev = threading.Event()
+
+    def set(self) -> None:
+        self._ev.set()
+
+    def clear(self) -> None:
+        self._ev.clear()
+
+    def is_set(self) -> bool:
+        return self._ev.is_set()
+
+
+def hard_limit(opts: SolverOptions) -> float | None:
+    """Seconds after which a solve is stopped by force (None: no limit)."""
+    if not opts.time_limit:
+        return None
+    grace = opts.grace if opts.grace is not None else max(10.0, 0.25 * opts.time_limit)
+    return opts.time_limit + grace
+
+
+def _can_spawn() -> bool:
+    """A child process can start only when the main program is a file (not stdin or a console)."""
+    import os
+    import sys
+    main = sys.modules.get("__main__")
+    path = getattr(main, "__file__", None)
+    if path is None:
+        return getattr(main, "__spec__", None) is not None      # started with python -m
+    return os.path.isfile(path)
+
+
+def _child_solve(conn, spec, params, deterministic, risk, fixed, opts) -> None:
+    """Child process: build the same model, solve it, send the log and the values."""
+    try:
+        def log(line: str) -> None:
+            conn.send(("log", line))
+        built = build(spec, params=params, deterministic=deterministic, risk=risk)
+        if fixed:
+            fix_values(built, fixed)
+        run = run_solver(built, opts, log)
+        values, duals = {}, {}
+        if run.ok:
+            for vd in built.model.component_data_objects(pyo.Var, descend_into=True):
+                if vd.value is not None:
+                    values[vd.getname(fully_qualified=True)] = vd.value
+            dual = built.model.component("dual")
+            if opts.duals and dual is not None:
+                for cd, val in dual.items():
+                    duals[cd.getname(fully_qualified=True)] = val
+        conn.send(("done", run, values, duals))
+    except Exception as exc:  # pragma: no cover - reported in the parent
+        conn.send(("error", f"{type(exc).__name__}: {exc}"))
+    finally:
+        conn.close()
+
+
+def _end_process(proc) -> None:
+    proc.terminate()
+    proc.join(3)
+    if proc.is_alive():
+        proc.kill()
+        proc.join(3)
+
+
+def run_solver_isolated(built: Built, spec: dict, opts: SolverOptions, log: LogFn | None = None, *,
+                        params=None, deterministic: bool = False, risk=None, fixed=None,
+                        cancel: Cancel | None = None) -> RunInfo:
+    """Solve in a child process and load the values into *built*.
+
+    The child builds the same model from *spec* (the build is deterministic, so
+    component names match). The parent stops the child at the hard limit or
+    when *cancel* is set; the run then has no solution.
+    """
+    import multiprocessing as mp
+    ctx = mp.get_context("spawn")
+    recv, send = ctx.Pipe(duplex=False)
+    child_opts = dataclasses.replace(opts, isolate=False)
+    proc = ctx.Process(target=_child_solve, args=(send, spec, params, deterministic, risk, fixed, child_opts),
+                       daemon=True, name="pyomo-studio-solve")
+    t0 = time.perf_counter()
+    proc.start()
+    send.close()
+    limit = hard_limit(opts)
+    lines: list[str] = []
+    result = None
+    stop = None
+    try:
+        while True:
+            if recv.poll(0.2):
+                try:
+                    msg = recv.recv()
+                except EOFError:
+                    break
+                if msg[0] == "log":
+                    lines.append(msg[1])
+                    if log:
+                        log(msg[1])
+                    continue
+                result = msg
+                break
+            if not proc.is_alive():
+                if recv.poll(0):
+                    continue
+                break
+            elapsed = time.perf_counter() - t0
+            if cancel is not None and cancel.is_set():
+                stop = USER_STOP
+            elif limit is not None and elapsed > limit:
+                stop = HARD_STOP
+            if stop:
+                _end_process(proc)
+                break
+    finally:
+        recv.close()
+        proc.join(5)
+        if proc.is_alive():
+            _end_process(proc)
+    wall = time.perf_counter() - t0
+    text = "\n".join(lines)
+    if stop == USER_STOP:
+        msg = f"The solve was stopped by the user after {wall:.0f} s. There is no solution."
+        if log:
+            log(msg)
+        return RunInfo(False, USER_STOP, "aborted", msg, wall, log=text)
+    if stop == HARD_STOP:
+        msg = (f"The solver did not stop at its time limit of {opts.time_limit:g} s, so the program stopped it "
+               f"after {wall:.0f} s. There is no solution. Make the model smaller, or increase the time limit.")
+        if log:
+            log(msg)
+        return RunInfo(False, HARD_STOP, "aborted", msg, wall, log=text)
+    if result is None:
+        return RunInfo(False, "error", "error",
+                       f"The solver process stopped without a result (exit code {proc.exitcode}).", wall, log=text)
+    if result[0] == "error":
+        raise EngineError(result[1])
+    _, run, values, duals = result
+    if values:
+        index = {vd.getname(fully_qualified=True): vd
+                 for vd in built.model.component_data_objects(pyo.Var, descend_into=True)}
+        for name, val in values.items():
+            vd = index.get(name)
+            if vd is not None:
+                vd.set_value(val, skip_validation=True)
+    if duals:
+        m = built.model
+        if m.component("dual") is None:
+            m.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
+        cons = {cd.getname(fully_qualified=True): cd
+                for cd in m.component_data_objects(pyo.Constraint, descend_into=True)}
+        for name, val in duals.items():
+            if name in cons:
+                m.dual[cons[name]] = val
+    run.log = run.log or text
+    return run
 
 
 def _finite(x) -> float | None:
@@ -878,7 +1052,8 @@ def validate_or_raise(spec: dict) -> None:
 
 def solve(spec: dict, opts: SolverOptions | None = None, log: LogFn | None = None, *,
           deterministic: bool = False, params: dict | None = None,
-          fixed: dict | None = None, risk: dict | None = None, label: str = "") -> SolveResult:
+          fixed: dict | None = None, risk: dict | None = None, label: str = "",
+          cancel: Cancel | None = None) -> SolveResult:
     """Validate, build and solve *spec*. Raise ``EngineError`` on problems."""
     validate_or_raise(spec)
     spec = S.effective(spec)
@@ -895,7 +1070,11 @@ def solve(spec: dict, opts: SolverOptions | None = None, log: LogFn | None = Non
             f"{stats['variables']} variables ({stats['binary']} binary, {stats['integer']} integer), "
             f"{stats['constraints']} constraints, {stats['scenarios']} scenario(s).")
         log(f"Solving with {opts.name} ...")
-    run = run_solver(built, opts, log)
+    if opts.isolate and _can_spawn():
+        run = run_solver_isolated(built, spec, opts, log, params=params, deterministic=deterministic,
+                                  risk=risk, fixed=fixed, cancel=cancel)
+    else:
+        run = run_solver(built, opts, log)
     res = _collect(built, spec, run, opts)
     res.label = label
     res.spec = spec
@@ -904,6 +1083,9 @@ def solve(spec: dict, opts: SolverOptions | None = None, log: LogFn | None = Non
         if res.objective is not None:
             log(f"Objective {res.objective_name} = {res.objective:.6g}")
     return res
+
+
+_solve = solve
 
 
 def build_summary(spec: dict, pprint_limit: int = 200_000) -> tuple[dict, str]:
@@ -936,7 +1118,7 @@ def write_model_file(spec: dict, path: str) -> None:
 # ---------------------------------------------------------------------------
 
 def stochastic_analysis(spec: dict, opts: SolverOptions | None = None,
-                        log: LogFn | None = None) -> dict:
+                        log: LogFn | None = None, cancel: Cancel | None = None) -> dict:
     """Compute RP, WS, EV, EEV, EVPI and VSS (risk-neutral definitions).
 
     RP   recourse problem (extensive form, expected value)
@@ -949,6 +1131,13 @@ def stochastic_analysis(spec: dict, opts: SolverOptions | None = None,
     """
     validate_or_raise(spec)
     spec = S.effective(spec)
+
+    def solve(*args, **kw):          # every step can be stopped by the user
+        r = _solve(*args, cancel=cancel, **kw)
+        if cancel is not None and cancel.is_set():
+            raise EngineError("The stochastic analysis was stopped by the user.")
+        return r
+
     if not spec["stochastic"].get("enabled"):
         raise EngineError("Turn on the stochastic model on the Uncertainty page first.")
     opts = opts or SolverOptions.from_spec(spec["solver"])

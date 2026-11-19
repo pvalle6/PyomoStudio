@@ -122,6 +122,7 @@ The navigation rail has these groups:
 | F5 | Solve |
 | F6 | Stochastic analysis |
 | F7 | Validate |
+| Esc | Stop the solve or the stochastic analysis |
 | Ctrl+E | Export a Pyomo script |
 | Ctrl+V | Paste values into the parameter grid |
 
@@ -312,6 +313,10 @@ An expression can use more than one line. Each line must be part of the same exp
 5. Click **Solve**, or push F5.
 
 The **Log** shows the solver output. The progress line moves until the solver stops. When the solver stops, the program opens the **Schedule** page or the **Results** page.
+
+To stop a solve, click **Stop** or push Esc. A stopped solve has no solution.
+
+The solver runs in a separate process. Some solvers, for example HiGHS, examine the time limit only between steps of their search, so they can continue long after the limit. Thus the program stops the solver process at the time limit plus a grace time: 25 % of the time limit, and not less than 10 s. For example, with a time limit of 120 s, the program stops the solver after 150 s. The log then shows `The solver did not stop at its time limit`.
 
 ### 6.2 Other actions
 
@@ -688,7 +693,43 @@ A vessel shows `hook-up or release` in the periods in which it is at the berth b
 
 **Export SVG** writes the schematic of the selected period. **Export CSV** writes the stock, the flows, the mode and the state of each tank in each period. The plan (section 9) has a section with the trend and a table for each tank.
 
-### 12.9 Add a layer type (programmers)
+### 12.9 Generate a random model
+
+The program can make random crude terminal and refinery models. Use them to test the layers, to compare solvers, or to learn how the data changes a plan.
+
+1. Click **Examples > Generate random model**.
+2. Select a **Size**: `tiny`, `small`, `medium` or `large`.
+3. Write a **Seed**, or click **Random**. The same seed and settings always give the same model.
+4. If necessary, change the counts and the settings below.
+5. Click **Generate**. The program opens the model on the **Layers** page.
+6. Click **Solve**.
+
+| Setting | Effect |
+|---|---|
+| **Congestion** (0 to 1) | A high value moves the vessel arrivals closer together. Vessels then wait for a berth. |
+| **Tank tightness** (0 to 1) | A high value makes the tanks smaller. The tanks can then hold the cargoes only if the crude units take crude at the same time. |
+| **Arrival-delay scenarios** | 2 or more makes a stochastic model. The first scenario has no delays. In the other scenarios, some vessels arrive late. The berth plan is the first-stage decision. |
+
+| Size | Vessels | Berths | Grades | Tanks | Crude units | Periods | Tank modes | Solve time with HiGHS |
+|---|---|---|---|---|---|---|---|---|
+| `tiny` | 3 | 1 | 2 | 4 | 1 | 24 of 2 h | On | Less than 1 s |
+| `small` | 5 | 2 | 3 | 6 | 2 | 36 of 2 h | On | Approximately 1 to 10 s |
+| `medium` | 8 | 3 | 4 | 8 | 2 | 24 of 4 h | Off | Often less than 30 s. Some instances take many minutes. |
+| `large` | 12 | 4 | 5 | 15 | 3 | 30 of 4 h | Off | Often reaches the time limit (a benchmark) |
+
+**Tank modes** on means that a tank cannot receive and send in the same period. This adds two binary variables for each tank and period, and makes large models much harder to solve.
+
+> CAUTION: The solve time of one model can change much from one run to the next. On a hard model, the program can stop the solver at the time limit plus the grace time (section 6.1), with no solution. Use `tiny` or `small` for interactive work.
+
+The generator makes data that has a solution: the vessels fit the berths, the berth work fits the time grid, and the tanks have space for the cargoes. The crude units can stop, so they do not make a model infeasible.
+
+From the command line:
+
+`python -m pyomo_studio generate model.json --preset small --seed 7 --check`
+
+`--check` solves the model. If the model has no solution, the program tries the next seeds.
+
+### 12.10 Add a layer type (programmers)
 
 A layer type is a Python class. Make a subclass of `Layer` in `pyomo_studio/layers/`, give it the decorator `@register` and import its module in `layers/__init__.py`. Set these class attributes: `type_name`, `title`, `description`, `fields`, `tables`, `export_ports` and `import_ports`. Write the components in the method `compile(ctx, out)`. Use `ctx.source(port, self)` and `ctx.consumed(port, self)` to find the connections. The **Layers** page makes the form from `fields` and `tables`.
 
@@ -862,6 +903,7 @@ The cost of the Storm scenario decreases from 666.75 to 612.5. The expected cost
 | `python -m pyomo_studio solve model.json --csv schedule.csv --json results.json` | Write the schedule and the results. |
 | `python -m pyomo_studio solve model.json --tanks-csv tanks.csv` | Write the tank stock and flows of each period. |
 | `python -m pyomo_studio export model.json model.py` | Write the Pyomo script. |
+| `python -m pyomo_studio generate model.json --preset small --seed 7` | Write a random model (section 12.9). |
 | `python -m pyomo_studio validate model.json` | Find errors. |
 | `python -m pyomo_studio solvers` | Show the installed solvers. |
 
@@ -905,6 +947,7 @@ Each component also has the key `layer`: empty, or the id of a custom layer.
 | `The model is infeasible` | No solution obeys all constraints. | Make constraints inactive one at a time to find the cause. Examine the bounds. |
 | `The model is unbounded` | The objective can improve without limit. | Add bounds to the variables. |
 | The solver stops at the time limit | The model is large or the big-M values are large. | Increase the time limit. Set a MIP gap of 0.01. Make the big-M values small. |
+| `The solver did not stop at its time limit` | The solver did not examine its limit in time, and the program stopped it. | Make the model smaller, for example with longer periods or fewer binary variables. Or increase the time limit. |
 | No schedule | The view type is `No schedule`, or a field has an error. | Set the view on **Schedule > View settings**. Read the message below the graphic. |
 | `port ... is also exported by layer ...` | Two enabled layers export the same port. | Switch one of the layers off. |
 | `grade ... is not in the shared grades` | A table uses a grade that is not on the grade list. | Add the grade on the **Layers** page, or correct the table. |

@@ -4,6 +4,7 @@
     python -m pyomo_studio model.json               open a model in the interface
     python -m pyomo_studio solve model.json --report plan.html [--analyze] [--tanks-csv tanks.csv]
     python -m pyomo_studio export model.json model_script.py
+    python -m pyomo_studio generate out.json [--preset small] [--seed 7] [--check]
     python -m pyomo_studio validate model.json
     python -m pyomo_studio solvers
 """
@@ -86,6 +87,31 @@ def cmd_export(args) -> int:
     return 0
 
 
+def cmd_generate(args) -> int:
+    from . import generate as G
+    opts = G.GenOptions(seed=args.seed, preset=args.preset, congestion=args.congestion, tightness=args.tightness,
+                        scenarios=args.scenarios)
+    for key in ("vessels", "berths", "grades", "tanks_per_grade", "cdus", "periods", "period_h", "tank_modes"):
+        if getattr(args, key) is not None:
+            setattr(opts, key, getattr(args, key))
+    try:
+        if args.check:
+            from . import engine
+            solver = engine.SolverOptions(name=args.solver or "appsi_highs", time_limit=args.time_limit or 120,
+                                          mip_gap=0.005, tee=False)
+            spec, res, seed = G.generate_checked(opts, solver, attempts=args.attempts, log=_log)
+            if seed != args.seed:
+                print(f"Seed {args.seed} gave no solution; seed {seed} is used.")
+        else:
+            spec = G.generate(opts)
+    except (ValueError, RuntimeError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+    S.save_spec(spec, args.output)
+    print(f"Model written to {args.output}: {spec['description'].split(' Options:')[0]}")
+    return 0
+
+
 def cmd_validate(args) -> int:
     spec = S.load_spec(args.model)
     rep = S.validate(spec)
@@ -109,7 +135,7 @@ def cmd_solvers(_args) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
-    commands = {"solve", "export", "validate", "solvers", "gui"}
+    commands = {"solve", "export", "generate", "validate", "solvers", "gui"}
     if not argv or (argv[0] not in commands and not argv[0].startswith("-")):
         from .gui.app import run
         return run(argv[0] if argv else None)
@@ -130,6 +156,22 @@ def main(argv: list[str] | None = None) -> int:
     e = sub.add_parser("export", help="write a standalone Pyomo script")
     e.add_argument("model")
     e.add_argument("output")
+    gp = sub.add_parser("generate", help="write a random crude terminal and refinery model")
+    gp.add_argument("output")
+    gp.add_argument("--preset", default="small", choices=["tiny", "small", "medium", "large"])
+    gp.add_argument("--seed", type=int, default=1)
+    for key, typ in (("vessels", int), ("berths", int), ("grades", int), ("tanks-per-grade", int), ("cdus", int),
+                     ("periods", int), ("period-h", float)):
+        gp.add_argument(f"--{key}", type=typ, help="replaces the preset value")
+    gp.add_argument("--tank-modes", dest="tank_modes", action=argparse.BooleanOptionalAction, default=None,
+                    help="tanks cannot receive and send in one period (more binaries; preset decides by default)")
+    gp.add_argument("--congestion", type=float, default=0.5, help="0 to 1: vessel arrivals closer together")
+    gp.add_argument("--tightness", type=float, default=0.5, help="0 to 1: less tank space")
+    gp.add_argument("--scenarios", type=int, default=0, help="number of arrival-delay scenarios (0 = none)")
+    gp.add_argument("--check", action="store_true", help="solve it; try the next seeds if it has no solution")
+    gp.add_argument("--attempts", type=int, default=5)
+    gp.add_argument("--solver")
+    gp.add_argument("--time-limit", type=float)
     v = sub.add_parser("validate", help="find errors in a model file")
     v.add_argument("model")
     sub.add_parser("solvers", help="show the installed solvers")
@@ -137,7 +179,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "gui":
         from .gui.app import run
         return run(args.model)
-    return {"solve": cmd_solve, "export": cmd_export, "validate": cmd_validate,
+    return {"solve": cmd_solve, "export": cmd_export, "generate": cmd_generate, "validate": cmd_validate,
             "solvers": cmd_solvers}[args.cmd](args)
 
 

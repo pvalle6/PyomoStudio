@@ -79,6 +79,7 @@ class StudioWindow(QMainWindow):
         self.schedule_error = ""
         self.results_stale = False
         self.job: Job | None = None
+        self.cancel = E.Cancel()
         self._names: set[str] = set()
 
         root = QWidget()
@@ -113,9 +114,15 @@ class StudioWindow(QMainWindow):
             act = QAction(p.stem.replace("_", " "), self)
             act.triggered.connect(lambda _=False, pp=p: self.open_model(str(pp)))
             menu.addAction(act)
+        menu.addSeparator()
+        act = QAction("Generate random model ...", self)
+        act.triggered.connect(self.generate_model)
+        menu.addAction(act)
         self.t_examples.setMenu(menu)
         self.t_validate = tool("Validate", "check", "Find errors (F7)")
         self.b_solve = button("Solve", "solve", accent=True, tip="Solve (F5)")
+        self.b_stop = button("Stop", "close", tip="Stop the solve (Esc)")
+        self.b_stop.hide()
         self.t_analyze = tool("Analyze", "analyze", "Stochastic analysis: EVPI and VSS (F6)")
         for w in (self.t_new, self.t_open, self.t_save, self.t_examples):
             bl.addWidget(w)
@@ -123,7 +130,7 @@ class StudioWindow(QMainWindow):
         sep.setProperty("divider", True)
         sep.setFixedSize(1, 20)
         bl.addWidget(sep)
-        for w in (self.t_validate, self.t_analyze, self.b_solve):
+        for w in (self.t_validate, self.t_analyze, self.b_solve, self.b_stop):
             bl.addWidget(w)
         right.addWidget(bar)
 
@@ -163,10 +170,11 @@ class StudioWindow(QMainWindow):
         self.t_save.clicked.connect(self.save)
         self.t_validate.clicked.connect(self.validate)
         self.b_solve.clicked.connect(self.solve)
+        self.b_stop.clicked.connect(self.stop)
         self.t_analyze.clicked.connect(self.analyze)
         for seq, fn in (("Ctrl+N", self.new_model), ("Ctrl+O", lambda: self.open_model()), ("Ctrl+S", self.save),
                         ("Ctrl+Shift+S", self.save_as), ("F5", self.solve), ("F6", self.analyze),
-                        ("F7", self.validate), ("Ctrl+E", self.export_script)):
+                        ("F7", self.validate), ("Ctrl+E", self.export_script), ("Esc", self.stop)):
             sc = QShortcut(QKeySequence(seq), self)
             sc.activated.connect(fn)
 
@@ -297,6 +305,25 @@ class StudioWindow(QMainWindow):
         self.status(f"Opened {Path(path).name}." + (" This is an example: Save makes a copy." if is_example else ""))
         self.go_page("home")
 
+    def generate_model(self):
+        from .. import generate as G
+        from .generate_dialog import GenerateDialog
+        if not self.maybe_save():
+            return
+        dlg = GenerateDialog(self)
+        if dlg.exec() != GenerateDialog.DialogCode.Accepted:
+            return
+        try:
+            spec = G.generate(dlg.options())
+        except ValueError as exc:
+            QMessageBox.critical(self, APP_NAME, str(exc))
+            return
+        self.set_spec(spec, None)
+        self.dirty = True
+        self.update_title()
+        self.status(f"Generated '{spec['name']}'. Click Solve, or Save to keep it.")
+        self.go_page("layers")
+
     def save(self) -> bool:
         if not self.path:
             return self.save_as()
@@ -327,7 +354,10 @@ class StudioWindow(QMainWindow):
             return
         solve_page = self.pages["solve"]
         solve_page.set_busy(True)
+        self.cancel.clear()
         self.b_solve.setEnabled(False)
+        self.b_stop.setEnabled(True)
+        self.b_stop.show()
         self.t_analyze.setEnabled(False)
         self.progress.show()
         self.status(busy_text)
@@ -340,9 +370,19 @@ class StudioWindow(QMainWindow):
 
     def _finished(self):
         self.pages["solve"].set_busy(False)
+        self.b_stop.hide()
         self.b_solve.setEnabled(True)
         self.t_analyze.setEnabled(True)
         self.progress.hide()
+
+    def stop(self):
+        """Stop the running solve or analysis. The solver process ends at once."""
+        if self.job is None or not self.job.isRunning():
+            return
+        self.cancel.set()
+        self.b_stop.setEnabled(False)
+        self.pages["solve"].b_stop.setEnabled(False)
+        self.status("Stopping ...")
 
     def _failed(self, text: str):
         self.pages["solve"].info.show_message("critical", "Error", text)
@@ -393,7 +433,8 @@ class StudioWindow(QMainWindow):
         snap = copy.deepcopy(self.spec)
         self.pages["solve"].append_log(f"--- Solve {snap.get('name')} ---")
         self.go_page("solve")
-        self._start(lambda log: E.solve(snap, None, log), lambda res: self.set_result(res, None, snap),
+        self._start(lambda log: E.solve(snap, None, log, cancel=self.cancel),
+                    lambda res: self.set_result(res, None, snap),
                     "Solving ...")
 
     def analyze(self):
@@ -407,7 +448,7 @@ class StudioWindow(QMainWindow):
         snap = copy.deepcopy(self.spec)
         self.pages["solve"].append_log(f"--- Stochastic analysis {snap.get('name')} ---")
         self.go_page("solve")
-        self._start(lambda log: E.stochastic_analysis(snap, None, log),
+        self._start(lambda log: E.stochastic_analysis(snap, None, log, cancel=self.cancel),
                     lambda a: self.set_result(a["rp_result"], a, snap), "Stochastic analysis ...")
 
     def set_result(self, res, analysis, snap):
@@ -518,6 +559,8 @@ class StudioWindow(QMainWindow):
                     != QMessageBox.StandardButton.Yes:
                 e.ignore()
                 return
+            self.cancel.set()          # ends the solver process
+            self.job.wait(8000)
         if not self.maybe_save():
             e.ignore()
             return
