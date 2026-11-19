@@ -7,6 +7,7 @@
     python -m pyomo_studio generate out.json [--preset small] [--seed 7] [--check]
     python -m pyomo_studio validate model.json
     python -m pyomo_studio solvers
+    python -m pyomo_studio mcp [--http] [--host HOST] [--port PORT]
 """
 from __future__ import annotations
 
@@ -133,9 +134,19 @@ def cmd_solvers(_args) -> int:
     return 0
 
 
+def cmd_mcp(args) -> int:
+    from .mcp_server import reset_session, run
+    reset_session()
+    if args.http:
+        run(transport="streamable-http", host=args.host, port=args.port)
+    else:
+        run(transport="stdio")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
-    commands = {"solve", "export", "generate", "validate", "solvers", "gui"}
+    commands = {"solve", "export", "generate", "validate", "solvers", "gui", "mcp"}
     if not argv or (argv[0] not in commands and not argv[0].startswith("-")):
         from .gui.app import run
         return run(argv[0] if argv else None)
@@ -175,12 +186,16 @@ def main(argv: list[str] | None = None) -> int:
     v = sub.add_parser("validate", help="find errors in a model file")
     v.add_argument("model")
     sub.add_parser("solvers", help="show the installed solvers")
+    m = sub.add_parser("mcp", help="run the MCP server (stdio by default)")
+    m.add_argument("--http", action="store_true", help="Streamable HTTP instead of stdio")
+    m.add_argument("--host", default="127.0.0.1")
+    m.add_argument("--port", type=int, default=8765)
     args = p.parse_args(argv)
     if args.cmd == "gui":
         from .gui.app import run
         return run(args.model)
     return {"solve": cmd_solve, "export": cmd_export, "generate": cmd_generate, "validate": cmd_validate,
-            "solvers": cmd_solvers}[args.cmd](args)
+            "solvers": cmd_solvers, "mcp": cmd_mcp}[args.cmd](args)
 
 
 if __name__ == "__main__":

@@ -27,6 +27,20 @@ On Windows you can also double-click `run_studio.bat`. You need Python 3.10 or l
 - **Export**: a standalone, readable Pyomo script; LP, MPS and NL model files.
 - **Advanced hook**: Python code that runs on each model block, for Pyomo features the forms do not cover (GDP, piecewise).
 - **Command line**: `python -m pyomo_studio solve model.json --analyze --report plan.html`, `python -m pyomo_studio generate model.json --preset small --seed 7`.
+- **MCP server**: `python -m pyomo_studio mcp` (stdio). An agent can load examples, edit the spec, solve, inspect the schedule and export a Pyomo script. Install with `pip install "pyomo-studio[mcp]"` (needs the `mcp` extra).
+
+## MCP (agent control)
+
+Install the extra, then start the server from this repo:
+
+```
+python -m pip install "mcp>=1.2"
+python -m pyomo_studio mcp
+```
+
+Grok reads `.grok/config.toml` in this project. Other hosts can copy `.mcp.json`. Streamable HTTP: `python -m pyomo_studio mcp --http --port 8765`.
+
+Tools wrap the same engine as the CLI: `list_examples`, `load_example`, `new_model`, `upsert_component`, `validate_model`, `solve_model`, `analyze_stochastic`, `get_solution`, `get_schedule`, `write_report`, `export_script`.
 
 ## Interface
 
@@ -48,6 +62,8 @@ pyomo_studio/
   report.py     HTML / Markdown / CSV / JSON plans
   codegen.py    standalone Pyomo script export
   layers/       switchable layers: framework, berth, tank farm, crude units, custom
+  session.py    in-memory session used by the MCP server
+  mcp_server.py MCP tools, resources and prompts
   gui/          Fluent 2 interface (theme, widgets, pages, window)
   examples/     bap_discrete, bap_continuous, bap_stochastic, production_lp, refinery_terminal
   docs/USER_GUIDE.md   user guide in ASD-STE100 Simplified Technical English

@@ -906,8 +906,24 @@ The cost of the Storm scenario decreases from 666.75 to 612.5. The expected cost
 | `python -m pyomo_studio generate model.json --preset small --seed 7` | Write a random model (section 12.9). |
 | `python -m pyomo_studio validate model.json` | Find errors. |
 | `python -m pyomo_studio solvers` | Show the installed solvers. |
+| `python -m pyomo_studio mcp` | Start the MCP server on stdio. An agent can then load, edit and solve models. |
+| `python -m pyomo_studio mcp --http --port 8765` | Start the MCP server on HTTP. |
 
 Options of `solve`: `--solver NAME`, `--time-limit SECONDS`, `--quiet` (no solver log).
+
+### 13.3 MCP server
+
+The MCP server uses the same engine as the command line. Install the extra with `python -m pip install "mcp>=1.2"`. Then run `python -m pyomo_studio mcp`.
+
+Typical agent steps:
+
+1. Call `list_examples` or `load_model`.
+2. Call `upsert_component` to add sets, parameters, variables, constraints and one active objective.
+3. Call `validate_model`.
+4. Call `solve_model`.
+5. Call `get_solution` or `write_report`.
+
+Expressions in a model file are Python code. Open model files only from sources that you trust.
 
 ---
 

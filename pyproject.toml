@@ -10,8 +10,12 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["pyomo>=6.7", "highspy>=1.7", "PySide6>=6.6"]
 
+[project.optional-dependencies]
+mcp = ["mcp>=1.2"]
+
 [project.scripts]
 pyomo-studio = "pyomo_studio.__main__:main"
+pyomo-studio-mcp = "pyomo_studio.mcp_server:run"
 
 [tool.setuptools.packages.find]
 include = ["pyomo_studio*"]
