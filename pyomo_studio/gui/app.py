@@ -19,6 +19,8 @@ from .. import schedule as SCH
 from .. import spec as S
 from .pages import (EXAMPLES_DIR, ComponentPage, GuidePage, HomePage, PlanPage, ResultsPage, SchedulePage,
                     SettingsPage, SolvePage, UncertaintyPage)
+from .inventory_page import TanksPage
+from .layers_page import LayersPage
 from .theme import Fonts, Theme, apply_window_effects, mica_supported, palette, stylesheet, system_is_dark
 from .widgets import Icons, NavigationView, button, label, tool
 
@@ -45,7 +47,8 @@ class Job(QThread):
 PAGES = [
     # key, glyph, text, header-before, footer
     ("home", "home", "Home", None, False),
-    ("sets", "sets", "Sets", "Model", False),
+    ("layers", "layers", "Layers", "Model", False),
+    ("sets", "sets", "Sets", None, False),
     ("params", "params", "Parameters", None, False),
     ("variables", "variables", "Variables", None, False),
     ("expressions", "expressions", "Expressions", None, False),
@@ -55,6 +58,7 @@ PAGES = [
     ("solve", "solve", "Solve", "Run", False),
     ("results", "results", "Results", "Output", False),
     ("schedule", "schedule", "Schedule", None, False),
+    ("tanks", "tanks", "Tanks", None, False),
     ("plan", "plan", "Plan", None, False),
     ("guide", "guide", "User guide", None, True),
     ("settings", "settings", "Settings", None, True),
@@ -176,8 +180,8 @@ class StudioWindow(QMainWindow):
     def _make_page(self, key: str) -> QWidget:
         if key in S.COMPONENT_KINDS:
             return ComponentPage(self, key)
-        return {"home": HomePage, "uncertainty": UncertaintyPage, "solve": SolvePage,
-                "results": ResultsPage, "schedule": SchedulePage, "plan": PlanPage,
+        return {"home": HomePage, "layers": LayersPage, "uncertainty": UncertaintyPage, "solve": SolvePage,
+                "results": ResultsPage, "schedule": SchedulePage, "tanks": TanksPage, "plan": PlanPage,
                 "guide": GuidePage, "settings": SettingsPage}[key](self)
 
     # -- navigation -------------------------------------------------------------
@@ -199,8 +203,22 @@ class StudioWindow(QMainWindow):
         self.dirty = True
         if results_too and self.result is not None:
             self.results_stale = True
-        self._names = set(S.component_names(self.spec))
+        self.refresh_names()
         self.update_title()
+
+    def refresh_names(self):
+        """Names for the expression editors: model pages plus the components of enabled layers."""
+        try:
+            self._names = set(S.component_names(S.effective(self.spec)))
+        except S.SpecError:
+            self._names = set(S.component_names(self.spec))
+
+    def effective_spec(self) -> dict | None:
+        """The flat spec with layers, or None if the layers have an error."""
+        try:
+            return S.effective(self.spec)
+        except S.SpecError:
+            return None
 
     def update_title(self):
         name = self.spec.get("name") or "Untitled model"
@@ -246,10 +264,11 @@ class StudioWindow(QMainWindow):
         self.analysis = None
         self.schedules = {}
         self.results_stale = False
-        self._names = set(S.component_names(spec))
+        self.refresh_names()
         self.update_title()
         self.pages["results"].info.hide()
         self.pages["schedule"].load()
+        self.pages["tanks"].load()
         self.pages["plan"].load()
         self.refresh_current()
 
@@ -394,7 +413,7 @@ class StudioWindow(QMainWindow):
     def set_result(self, res, analysis, snap):
         self.result = res
         self.analysis = analysis
-        self.result_spec = snap
+        self.result_spec = res.spec or snap
         self.results_stale = False
         self.recompute_schedules(go=False)
         self.pages["results"].load(res, analysis)
@@ -414,7 +433,9 @@ class StudioWindow(QMainWindow):
         res = self.result
         if res is not None and res.ok:
             spec = copy.deepcopy(self.result_spec or self.spec)
-            spec["schedule"] = copy.deepcopy(self.spec["schedule"])
+            # Use the edited view; keep the view of a layer when the model pages have none.
+            if self.spec["schedule"].get("type", "none") != "none":
+                spec["schedule"] = copy.deepcopy(self.spec["schedule"])
             for sc in res.scenarios:
                 try:
                     sched = SCH.compute_schedule(spec, res.built, sc.name)
@@ -424,6 +445,7 @@ class StudioWindow(QMainWindow):
                 if sched is not None:
                     self.schedules[sc.name] = sched
         self.pages["schedule"].load()
+        self.pages["tanks"].load()
         self.pages["plan"].load()
         if go:
             self.go_page("schedule")

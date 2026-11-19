@@ -124,21 +124,27 @@ def new_spec(name: str = "Untitled model") -> dict:
         "schedule": default_schedule(),
         "solver": default_solver(),
         "hook": "",
+        "layers": _default_layers(),
     }
+
+
+def _default_layers() -> dict:
+    from .layers import default_layers
+    return default_layers()
 
 
 ITEM_DEFAULTS: dict[str, dict] = {
     "sets": {"name": "", "kind": "list", "elements": [], "start": 1, "stop": 1,
-             "step": 1, "expr": "", "dimen": 1, "description": ""},
+             "step": 1, "expr": "", "dimen": 1, "description": "", "layer": ""},
     "params": {"name": "", "index": "", "value": 0.0, "default": 0.0,
-               "values": [], "formula": "", "description": ""},
+               "values": [], "formula": "", "description": "", "layer": ""},
     "variables": {"name": "", "index": "", "domain": "NonNegativeReals",
-                  "lb": "", "ub": "", "init": "", "stage": 2, "description": ""},
-    "expressions": {"name": "", "index": "", "expr": "", "description": ""},
+                  "lb": "", "ub": "", "init": "", "stage": 2, "description": "", "layer": ""},
+    "expressions": {"name": "", "index": "", "expr": "", "description": "", "layer": ""},
     "constraints": {"name": "", "index": "", "condition": "", "expr": "",
-                    "active": True, "description": ""},
+                    "active": True, "description": "", "layer": ""},
     "objectives": {"name": "", "sense": "minimize", "expr": "", "active": True,
-                   "description": ""},
+                   "description": "", "layer": ""},
 }
 
 COMPONENT_KINDS = ["sets", "params", "variables", "expressions", "constraints", "objectives"]
@@ -183,6 +189,8 @@ def normalize(spec: dict) -> dict:
         sc.setdefault("name", "S")
         sc.setdefault("probability", 0.0)
         sc.setdefault("changes", [])
+    from .layers import normalize_layers
+    normalize_layers(out)
     # JSON stores tuples as lists; sets keep tuples in memory.
     for s in out["sets"]:
         s["elements"] = [tuple(e) if isinstance(e, list) else e for e in s.get("elements", [])]
@@ -705,9 +713,23 @@ class ValidationReport:
         self.issues.append(Issue(level, where, message))
 
 
+def effective(spec: dict) -> dict:
+    """The flat spec that is built: base components plus the enabled layers.
+
+    Composing is idempotent: the result of ``effective`` is returned as it is.
+    """
+    from .layers import compose
+    return compose(spec)
+
+
 def validate(spec: dict) -> ValidationReport:
     """Find problems that stop a model build. Data is resolved as a test."""
     rep = ValidationReport()
+    try:
+        spec = effective(spec)
+    except SpecError as exc:
+        rep.add("error", exc.where, exc.message)
+        return rep
     seen: dict[str, str] = {}
     for kind in COMPONENT_KINDS:
         for item in spec[kind]:

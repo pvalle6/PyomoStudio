@@ -64,7 +64,7 @@ TOKENS = {
 
 # Segoe Fluent Icons code points (the same points exist in Segoe MDL2 Assets).
 GLYPH = {
-    "nav": "", "home": "", "sets": "", "params": "", "variables": "",
+    "nav": "", "home": "", "tanks": "", "layers": "", "sets": "", "params": "", "variables": "",
     "expressions": "", "constraints": "", "objectives": "", "uncertainty": "",
     "view": "", "solve": "", "results": "", "schedule": "", "plan": "",
     "guide": "", "settings": "", "new": "", "open": "", "save": "",
@@ -78,7 +78,7 @@ GLYPH = {
 
 #: Plain Unicode stand-ins for systems without Segoe Fluent Icons (macOS, Linux).
 FALLBACK_GLYPH = {
-    "nav": "\u2630", "home": "\u2302", "sets": "\u2208", "params": "\u03b8", "variables": "x",
+    "nav": "\u2630", "home": "\u2302", "tanks": "▯", "layers": "≣", "sets": "\u2208", "params": "\u03b8", "variables": "x",
     "expressions": "\u0192", "constraints": "\u2264", "objectives": "\u25ce", "uncertainty": "\u2248",
     "view": "\u25eb", "solve": "\u25b6", "results": "\u25a4", "schedule": "\u25a5", "plan": "\u2261",
     "guide": "?", "settings": "\u2699", "new": "\u25a1", "open": "\u2197", "save": "\u21e9",
@@ -321,10 +321,11 @@ QSpinBox::up-button, QSpinBox::down-button, QDoubleSpinBox::up-button, QDoubleSp
   width: 0; border: 0; }}
 
 QCheckBox, QRadioButton {{ spacing: 8px; background: transparent; }}
-QCheckBox::indicator {{ width: 18px; height: 18px; border-radius: {RADIUS_CONTROL}px;
+QCheckBox::indicator, QListView::indicator {{ width: 18px; height: 18px; border-radius: {RADIUS_CONTROL}px;
   border: 1px solid {t['stroke_strong']}; background: {t['ctrl']}; }}
-QCheckBox::indicator:hover {{ background: {t['ctrl_hover']}; }}
-QCheckBox::indicator:checked {{ background: {t['accent']}; border-color: {t['accent']}; image: url("{chk}"); }}
+QCheckBox::indicator:hover, QListView::indicator:hover {{ background: {t['ctrl_hover']}; }}
+QCheckBox::indicator:checked, QListView::indicator:checked {{ background: {t['accent']}; border-color: {t['accent']};
+  image: url("{chk}"); }}
 QRadioButton::indicator {{ width: 16px; height: 16px; border-radius: 9px; border: 1px solid {t['stroke_strong']};
   background: {t['ctrl']}; }}
 QRadioButton::indicator:checked {{ width: 8px; height: 8px; border: 5px solid {t['accent']};

@@ -270,6 +270,10 @@ class ComponentPage(QWidget):
         return self.studio.spec[self.kind]
 
     def item_text(self, it: dict) -> str:
+        text = self._item_text(it)
+        return f"{text}    [{it['layer']}]" if it.get("layer") else text
+
+    def _item_text(self, it: dict) -> str:
         k = self.kind
         n = it.get("name", "")
         if k == "sets":
@@ -362,6 +366,11 @@ class ComponentPage(QWidget):
         names = self.studio.names
         self.f["name"] = f.add("name", "Name", QLineEdit(), "Letters, digits and _. Start with a letter.")
         self.f["description"] = f.add("description", "Description", QLineEdit())
+        lay_cb = QComboBox()
+        self.f["layer"] = f.add("layer", "Layer", lay_cb,
+                                "Always on, or a custom layer from the Layers page. A component of a custom "
+                                "layer is in the model only when the layer is on.")
+        lay_cb.activated.connect(lambda _i: self.set("layer", lay_cb.currentData() or ""))
         k = self.kind
         if k == "sets":
             cb = QComboBox()
@@ -494,6 +503,7 @@ class ComponentPage(QWidget):
             return
         it = self.cur
         self._loading = True
+        self._fill_layers(it.get("layer", ""))
         for key, w in self.f.items():
             val = it.get(key, "")
             if isinstance(w, QLineEdit):
@@ -522,6 +532,18 @@ class ComponentPage(QWidget):
             self.reload_grid()
         if self.kind == "sets":
             self.update_preview()
+
+    def _fill_layers(self, current: str):
+        cb = self.f["layer"]
+        cb.clear()
+        cb.addItem("Always on", "")
+        lay = self.studio.spec.get("layers") or {}
+        for li in lay.get("items") or []:
+            if li.get("type") == "custom":
+                cb.addItem(f"{li['id']}  ({'on' if li.get('enabled', True) else 'off'})", li["id"])
+        if current and cb.findData(current) < 0:
+            cb.addItem(f"{current}  (missing layer)", current)
+        self.form.show_row("layer", cb.count() > 1)
 
     def update_visibility(self):
         it = self.cur
@@ -569,10 +591,14 @@ class ComponentPage(QWidget):
                 msg = "The program uses this name. Use a different name."
             elif any(x.get("name") == n for x in others):
                 msg = "Another component has this name."
+            elif n in self.studio.names() and n not in {x.get("name") for kind in S.COMPONENT_KINDS
+                                                        for x in self.studio.spec[kind]}:
+                msg = "A layer component has this name."
         elif key == "index":
             try:
+                flat = self.studio.effective_spec() or self.studio.spec
                 for item in S.parse_index(it.get("index", "")):
-                    if item.set_name not in {s["name"] for s in self.studio.spec["sets"]}:
+                    if item.set_name not in {s["name"] for s in flat["sets"]}:
                         msg = f"Set '{item.set_name}' does not exist."
             except S.SpecError as exc:
                 msg = exc.message
@@ -614,7 +640,7 @@ class ComponentPage(QWidget):
 
     def update_preview(self):
         try:
-            sets = S.resolve_sets(self.studio.spec)
+            sets = S.resolve_sets(self.studio.effective_spec() or self.studio.spec)
             els = sets.get(self.cur["name"], [])
             shown = ", ".join(S.format_element(e) if not isinstance(e, tuple) else f"({S.format_element(e)})"
                               for e in els[:12])
@@ -634,7 +660,7 @@ class ComponentPage(QWidget):
         it = self.cur
         try:
             items = S.parse_index(it.get("index", ""))
-            sets = S.resolve_sets(self.studio.spec)
+            sets = S.resolve_sets(self.studio.effective_spec() or self.studio.spec)
         except S.SpecError as exc:
             self.grid_msg.setText(str(exc))
             return
@@ -787,8 +813,9 @@ class UncertaintyPage(QWidget):
         self.alpha.setValue(float(r.get("alpha", 0.9)))
         self.weight.setValue(float(r.get("weight", 0.0)))
         self._loading = False
-        first = [v["name"] for v in self.studio.spec["variables"] if int(v.get("stage", 2)) == 1]
-        second = [v["name"] for v in self.studio.spec["variables"] if int(v.get("stage", 2)) != 1]
+        flat = self.studio.effective_spec() or self.studio.spec
+        first = [v["name"] for v in flat["variables"] if int(v.get("stage", 2)) == 1]
+        second = [v["name"] for v in flat["variables"] if int(v.get("stage", 2)) != 1]
         self.stage_info.setText(f"First stage: {', '.join(first) or 'none'}.   "
                                 f"Second stage: {', '.join(second) or 'none'}.   "
                                 "Change the stage of a variable on the Variables page.")
@@ -884,7 +911,8 @@ class UncertaintyPage(QWidget):
         self.c_del.setEnabled(has)
         rows = scen[r]["changes"] if has else []
         self.changes.setRowCount(len(rows))
-        params = [p["name"] for p in self.studio.spec["params"]]
+        flat = self.studio.effective_spec() or self.studio.spec
+        params = [p["name"] for p in flat["params"]]
         for i, chg in enumerate(rows):
             cb = QComboBox()
             cb.addItems(params)
@@ -929,7 +957,8 @@ class UncertaintyPage(QWidget):
         ch = self._cur_changes()
         if ch is None:
             return
-        first = self.studio.spec["params"][0]["name"] if self.studio.spec["params"] else ""
+        flat = self.studio.effective_spec() or self.studio.spec
+        first = flat["params"][0]["name"] if flat["params"] else ""
         ch.append({"param": first, "index": "", "op": "scale", "value": 1.0})
         self.studio.mark_dirty()
         self.show_changes(self.table.currentRow())
@@ -1355,6 +1384,8 @@ class SchedulePage(QWidget):
         bv.setSpacing(12)
         bv.addWidget(label("The view maps the solution to tasks. Each field is an expression in the language "
                            "of the model, with the task index names.", "secondary", wrap=True))
+        self.layer_note = label("", "caption", wrap=True)
+        bv.addWidget(self.layer_note)
         self.form = Form()
         self.type = QComboBox()
         self.type.addItem("No schedule", "none")
@@ -1376,8 +1407,20 @@ class SchedulePage(QWidget):
         sa.widget().layout().setContentsMargins(0, 12, 0, 12)
         self.tabs.addTab(sa, "View settings")
 
+    def layer_view(self) -> dict | None:
+        """The view that a layer gives when the model pages have no view."""
+        if self.studio.spec["schedule"].get("type", "none") != "none":
+            return None
+        flat = self.studio.effective_spec()
+        if flat and flat["schedule"].get("type", "none") != "none":
+            return flat["schedule"]
+        return None
+
     def on_show(self):
-        sv = self.studio.spec["schedule"]
+        lv = self.layer_view()
+        sv = lv or self.studio.spec["schedule"]
+        self.layer_note.setText("A layer gives this view. Change a field to make it your own view." if lv else "")
+        self.layer_note.setVisible(bool(lv))
         self._loading = True
         self.type.setCurrentIndex(max(0, self.type.findData(sv.get("type", "none"))))
         for key, w in self.fields.items():
@@ -1386,13 +1429,17 @@ class SchedulePage(QWidget):
         self.update_rows()
 
     def update_rows(self):
-        kind = self.studio.spec["schedule"].get("type", "none")
+        kind = (self.layer_view() or self.studio.spec["schedule"]).get("type", "none")
         for key in ("position", "size", "space_max", "space_label"):
             self.form.show_row(key, kind == "space_time")
 
     def _set(self, key, val):
         if self._loading:
             return
+        lv = self.layer_view()
+        if lv is not None:     # start from the layer view
+            self.studio.spec["schedule"].update(copy.deepcopy(lv))
+            self.layer_note.hide()
         self.studio.spec["schedule"][key] = val
         self.studio.mark_dirty(results_too=False)
         if key == "type":

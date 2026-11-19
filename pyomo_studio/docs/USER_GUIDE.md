@@ -35,7 +35,7 @@ These text styles show parts of the program:
 
 - **Bold** text is the name of a control, a page or a field. For example: click **Solve**.
 - `Code` text is text that you write, or text that the program shows.
-- *Italic* text is a term that the glossary (section 17) explains.
+- *Italic* text is a term that the glossary (section 18) explains.
 
 ### 1.3 Warnings and cautions
 
@@ -106,9 +106,9 @@ The window follows the Windows 11 Fluent design.
 The navigation rail has these groups:
 
 - **Home** — model name, description, steps and examples.
-- **Model** — **Sets**, **Parameters**, **Variables**, **Expressions**, **Constraints**, **Objectives**, **Uncertainty**.
+- **Model** — **Layers**, **Sets**, **Parameters**, **Variables**, **Expressions**, **Constraints**, **Objectives**, **Uncertainty**.
 - **Run** — **Solve**.
-- **Output** — **Results**, **Schedule**, **Plan**.
+- **Output** — **Results**, **Schedule**, **Tanks**, **Plan**.
 - At the bottom: **User guide** and **Settings**.
 
 ### 3.2 Keyboard shortcuts
@@ -546,6 +546,7 @@ Click **Analyze** (F6). The program solves these problems:
 
 | Name | Problem |
 |---|---|
+| Port | A quantity that one layer gives to other layers, for example the crude received in each period. |
 | RP | The recourse problem: the extensive form, risk-neutral. |
 | WS | Wait and see: each scenario solved alone with perfect information. $\mathrm{WS} = \sum_s p_s f_s^\ast$. |
 | EV | The expected-value problem: one scenario with the mean data. |
@@ -565,9 +566,137 @@ The analysis uses the risk-neutral objective, because EVPI and VSS are defined f
 
 ---
 
-## 12 Example: the Berth Allocation Problem
+## 12 Layers
 
-### 12.1 The problem
+### 12.1 What a layer is
+
+A *layer* is a part of a model that you can switch on and off. For example, one layer allocates berths, one layer manages the crude tanks and one layer runs the crude units. The layers connect through *ports*. You can solve all the layers together, or each layer alone.
+
+The program has these layer types:
+
+| Type | What it calculates | Imports | Exports |
+|---|---|---|---|
+| **Berth allocation** | The berth and the berthing time of each vessel, and the periods in which each vessel discharges. | — | `crude_receipt` |
+| **Tank farm** | The stock in each tank, and the crude into and out of each tank in each period. | `crude_receipt` | `crude_supply` |
+| **Crude distillation units** | The charge rate and the crude blend of each unit, and the start-ups. | `crude_supply` | — |
+| **Custom** | Components that you make on the model pages. | Ports that you name | Ports that you name |
+
+The program makes one model from the components on the model pages and the enabled layers. Validation, the solve, the stochastic model, the results, the plan and the Pyomo script all use this model.
+
+### 12.2 The shared time grid
+
+All layers use the same time grid. Set it on the **Layers** page:
+
+| Field | Meaning |
+|---|---|
+| **Periods** | The number of periods. The model gets the set `PERIODS` = 1, 2, ... |
+| **Period (h)** | The length of one period in hours. The model gets the parameter `period_h`. |
+| **Start** | The date and time of t = 0. The schedule uses it for clock times. |
+| **Grades** | The crude grades, with commas between them. The model gets the set `GRADES`. |
+
+Period `k` starts at `(k - 1) * period_h` and ends at `k * period_h`. Berth times are continuous. The berth layer puts each discharge into the periods that are fully in the berth time of the vessel.
+
+### 12.3 Ports and fallback data
+
+A port is a quantity with an index that one layer gives to other layers. For example, `crude_receipt[g, k]` is the crude of grade `g` that the vessels discharge in period `k` (m3).
+
+- Only one enabled layer can export a port.
+- Many layers can import a port.
+- When no enabled layer exports a port, each importer uses its *fallback* data.
+- When no enabled layer imports a port, the exporter can also use fallback data.
+
+| Layer | Fallback when the other layer is off |
+|---|---|
+| Tank farm, no berth layer | The **Fixed deliveries** table. A delivery that does not fit has a penalty cost. |
+| Tank farm, no crude unit layer | The **Fixed send-out demand** table. A shortfall has a penalty cost. |
+| Crude units, no tank layer | The **Availability** column of the **Crude properties** table. |
+| Berth allocation, no tank layer | No discharge periods. The model is the usual berth allocation problem. |
+
+The **Connections** box of each layer shows each port and its partner layer, or `fallback data`.
+
+### 12.4 Add and switch layers
+
+1. Open the **Layers** page.
+2. Set the time grid and the grades.
+3. Click **Add layer**. Select the layer type.
+4. Fill the settings and the tables. To paste a block from Excel, select a cell and push Ctrl+V.
+5. Read the **Connections** box.
+6. Click **Solve**.
+
+To switch a layer off, clear its check box in the list. The layer keeps its data. Switch it on again at any time.
+
+The **Layer id** is the start of the names of the layer components. For example, the berth layer `berth` makes `berth_x`, `berth_t` and `berth_dep`. Use these names in scenario changes, the schedule view and your own constraints.
+
+> CAUTION: When you change a layer id, the component names change. Update the scenario changes and the expressions that use the old names.
+
+### 12.5 The objective
+
+Each layer has a cost. The program minimizes the total:
+
+`TotalCost = weight1 * cost1 + weight2 * cost2 + ...`
+
+A profit is a negative cost. For example, the crude unit layer has the cost `start-up cost - crude margin`. The results show the cost of each layer as a measure, for example `Cost_berth`.
+
+If **Add the objective of the model pages** is on, the active objective of the **Objectives** page is also in the total. A maximized objective has a minus sign in the total.
+
+### 12.6 Custom layers
+
+A custom layer holds components that you make on the model pages.
+
+1. On the **Layers** page, click **Add layer > Custom**.
+2. Open a component on a model page, for example on **Constraints**.
+3. In the **Layer** field, select the custom layer.
+4. Do steps 2 and 3 again for each component of the layer.
+
+When the custom layer is off, its components are not in the model.
+
+To import a port, add a row to **Imported ports**. Write the port name, an **Alias** and the **Fallback expression**. The program makes an expression with the alias name. Use the alias in your constraints. It is the exported quantity when the exporter is on, and the fallback expression when the exporter is off.
+
+To export a port, add a row to **Exported ports**. Name a variable or an expression that has the index of the port.
+
+### 12.7 Example: crude terminal and refinery
+
+Open **Examples > refinery terminal**. The example has three layers on a grid of 36 periods of 2 h:
+
+- **berth**: five vessels and two berths.
+- **tank**: six tanks, two for each grade (`LSW`, `ARL`, `HSR`). A tank cannot receive and send in the same period.
+- **cdu**: two crude units with sulfur limits on the blend.
+
+Solve the example. Each discharge must fit the tank space, the tank rates and the 2 h periods. Thus vessels `V2`, `V3` and `V4` stay approximately 2 h longer at the berth, and the berth cost is 117,600. Switch the **tank** layer off and solve again. The berth cost is then 107,625, because no tank limits the discharge.
+
+### 12.8 The tank schematic
+
+The **Tanks** page shows the tank farm of the last solve. It has two graphics:
+
+- The *schematic* shows one period. Each grade has one row: the receipt on the left, the tanks in the middle and the send-out on the right. A strip below shows the charge, the blend and the blend sulfur of each crude unit.
+- The *trend* shows the stock of each tank for all the periods. A frame shows the selected period.
+
+To select a period, move the **Period** slider, click **Previous period** or **Next period**, or click the trend. Click **Play** to step through the periods.
+
+Each tank shows its stock as a gray level, its stock in m3 and in percent, the heel (dashed line) and its mode: `RECEIVING`, `SENDING` or `STANDING`. A flow in the selected period is a dark line with an arrow. A light line has no flow.
+
+The graphic follows ISA-101, like the schedule (section 8.3):
+
+| Indicator | State | Cause |
+|---|---|---|
+| Amber triangle with `2` | Warning | The stock is 95 % of the capacity or more (little ullage), or the stock is at the heel. A vessel is at the berth after hook-up but does not pump. A crude unit is stopped. |
+| Red square with `1` | Alarm | The stock is outside the heel and the capacity. A fixed delivery does not fit (`REJECTED`). A fixed demand is not met (`SHORT`). |
+
+Text below the tank repeats each state. In the trend, an amber or red band at the top of a row shows the periods with a warning or an alarm.
+
+A vessel shows `hook-up or release` in the periods in which it is at the berth but cannot pump. This is normal. Pumping occurs only in full periods.
+
+**Export SVG** writes the schematic of the selected period. **Export CSV** writes the stock, the flows, the mode and the state of each tank in each period. The plan (section 9) has a section with the trend and a table for each tank.
+
+### 12.9 Add a layer type (programmers)
+
+A layer type is a Python class. Make a subclass of `Layer` in `pyomo_studio/layers/`, give it the decorator `@register` and import its module in `layers/__init__.py`. Set these class attributes: `type_name`, `title`, `description`, `fields`, `tables`, `export_ports` and `import_ports`. Write the components in the method `compile(ctx, out)`. Use `ctx.source(port, self)` and `ctx.consumed(port, self)` to find the connections. The **Layers** page makes the form from `fields` and `tables`.
+
+---
+
+## 13 Example: the Berth Allocation Problem
+
+### 13.1 The problem
 
 Vessels arrive at a container terminal. Each vessel needs a berth for a known handling time. A berth can serve only one vessel at a time. The terminal must find the berth and the start time of each vessel. The objective is a short time in port and few late departures.
 
@@ -579,7 +708,7 @@ The program has three examples. Click **Examples** in the command bar, or open t
 | `bap_continuous.json` | 8 vessels on a 600 m quay. MILP with time and space. |
 | `bap_stochastic.json` | The discrete model with 3 scenarios of delays. Two-stage stochastic MILP. |
 
-### 12.2 Discrete berths: the formulation
+### 13.2 Discrete berths: the formulation
 
 Sets: vessels $V$, berths $B$, ordered pairs $P = \{(u,v) \in V \times V : u \neq v\}$.
 
@@ -622,7 +751,7 @@ $$
 
 A small big-M makes the LP relaxation stronger. Thus the solver finds the optimum faster.
 
-### 12.3 Discrete berths: the procedure
+### 13.3 Discrete berths: the procedure
 
 1. Click **Examples > bap discrete**.
 2. Look at each page from **Sets** to **Objectives**. Compare the forms with the formulation above.
@@ -647,7 +776,7 @@ Try these changes. Solve again after each change and compare the plan.
 
 These results show the trade-off between waiting time and late departures. The objective `Cost` balances the two with the weight `lam`.
 
-### 12.4 Continuous quay
+### 13.4 Continuous quay
 
 In this model, the vessels share a quay of length $L$. The berth is a position $q_v$ on the quay. Two vessels must be apart in space or in time. The handling time increases with the distance from the preferred position $r_v$:
 
@@ -667,7 +796,7 @@ $$
 
 Open **Examples > bap continuous** and solve. The optimal cost is approximately 420.27. The **Schedule** page shows a space-time chart. Each vessel is a rectangle: the width is the handling time and the height is the vessel length.
 
-### 12.5 Uncertain arrivals
+### 13.5 Uncertain arrivals
 
 The stochastic example uses the discrete model with three scenarios:
 
@@ -689,6 +818,7 @@ The analysis gives these values:
 
 | Value | Result |
 |---|---|
+| Port | A quantity that one layer gives to other layers, for example the crude received in each period. |
 | RP | 343.85 |
 | WS | 312.65 |
 | EVPI | 31.2 |
@@ -711,9 +841,9 @@ The cost of the Storm scenario decreases from 666.75 to 612.5. The expected cost
 
 ---
 
-## 13 Export and automation
+## 14 Export and automation
 
-### 13.1 The Pyomo script
+### 14.1 The Pyomo script
 
 **Export Pyomo script** (Ctrl+E) writes a Python file. The file has the data, a `build` function with the full model, the extensive form for a stochastic model, and the solve. It needs only Pyomo and a solver. Use it to:
 
@@ -721,7 +851,7 @@ The cost of the Storm scenario decreases from 666.75 to 612.5. The expected cost
 - Keep the model in version control.
 - Learn Pyomo from your own model.
 
-### 13.2 The command line
+### 14.2 The command line
 
 | Command | Action |
 |---|---|
@@ -730,6 +860,7 @@ The cost of the Storm scenario decreases from 666.75 to 612.5. The expected cost
 | `python -m pyomo_studio solve model.json --report plan.html` | Solve and write the HTML plan. |
 | `python -m pyomo_studio solve model.json --analyze --report plan.html` | Solve, do the stochastic analysis and write the plan. |
 | `python -m pyomo_studio solve model.json --csv schedule.csv --json results.json` | Write the schedule and the results. |
+| `python -m pyomo_studio solve model.json --tanks-csv tanks.csv` | Write the tank stock and flows of each period. |
 | `python -m pyomo_studio export model.json model.py` | Write the Pyomo script. |
 | `python -m pyomo_studio validate model.json` | Find errors. |
 | `python -m pyomo_studio solvers` | Show the installed solvers. |
@@ -738,7 +869,7 @@ Options of `solve`: `--solver NAME`, `--time-limit SECONDS`, `--quiet` (no solve
 
 ---
 
-## 14 The model file
+## 15 The model file
 
 A model is a JSON file. You can read it and compare versions of it in version control. The file has these keys:
 
@@ -755,10 +886,13 @@ A model is a JSON file. You can read it and compare versions of it in version co
 | `schedule` | The schedule view fields (section 8.2). |
 | `solver` | `name`, `time_limit`, `mip_gap`, `tee`, `duals`, `options`. |
 | `hook` | The custom Python code. |
+| `layers` | `grid` (`periods`, `period_h`, `grades`, `start`), `items` (`id`, `type`, `name`, `enabled`, `weight`, `config`), `objective` (`name`, `include_base`). |
+
+Each component also has the key `layer`: empty, or the id of a custom layer.
 
 ---
 
-## 15 Troubleshooting
+## 16 Troubleshooting
 
 | Problem | Possible cause | Remedy |
 |---|---|---|
@@ -772,12 +906,15 @@ A model is a JSON file. You can read it and compare versions of it in version co
 | `The model is unbounded` | The objective can improve without limit. | Add bounds to the variables. |
 | The solver stops at the time limit | The model is large or the big-M values are large. | Increase the time limit. Set a MIP gap of 0.01. Make the big-M values small. |
 | No schedule | The view type is `No schedule`, or a field has an error. | Set the view on **Schedule > View settings**. Read the message below the graphic. |
+| `port ... is also exported by layer ...` | Two enabled layers export the same port. | Switch one of the layers off. |
+| `grade ... is not in the shared grades` | A table uses a grade that is not on the grade list. | Add the grade on the **Layers** page, or correct the table. |
+| A fallback penalty in the layer cost | Fixed data does not fit the tanks or the demand. | Examine the fixed tables, or switch on the partner layer. |
 | The window has no Mica | Windows 10, Windows 11 before 22H2, or Mica is off. | Update Windows. Set Mica on in **Settings**. Start the program again. |
 | No icons in the window | The Segoe Fluent Icons font is missing (not Windows 11). | The program shows squares in place of the icons. All functions operate. |
 
 ---
 
-## 16 Good practice
+## 17 Good practice
 
 - Start with a small data set. Make sure that the model is correct. Then use the full data.
 - Click **Validate** after each large change.
@@ -789,7 +926,7 @@ A model is a JSON file. You can read it and compare versions of it in version co
 
 ---
 
-## 17 Glossary
+## 18 Glossary
 
 | Term | Meaning |
 |---|---|
@@ -802,9 +939,12 @@ A model is a JSON file. You can read it and compare versions of it in version co
 | EVPI | Expected value of perfect information: RP − WS. |
 | Extensive form | One model with a copy of each scenario and non-anticipativity constraints. |
 | First stage | Decisions made before the uncertain data is known. They are the same in all scenarios. |
+| Fallback | The fixed data that a layer uses when the layer at the other end of a port is off. |
 | ISA-101 | A standard for process graphics. Normal states are gray. Color shows abnormal states. |
+| Layer | A part of a model that you can switch on and off. |
 | MIP gap | The relative distance between the best solution and the best bound. |
 | Non-anticipativity | The rule that first-stage decisions cannot use information from the future. |
+| Port | A quantity that one layer gives to other layers, for example the crude received in each period. |
 | RP | Recourse problem: the stochastic model with the expected-value objective. |
 | Second stage | Decisions made after the uncertain data is known. They change with the scenario. |
 | Slack | The distance from the constraint value to its limit. |

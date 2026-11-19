@@ -2,7 +2,7 @@
 
     python -m pyomo_studio                          open the desktop interface
     python -m pyomo_studio model.json               open a model in the interface
-    python -m pyomo_studio solve model.json --report plan.html [--analyze]
+    python -m pyomo_studio solve model.json --report plan.html [--analyze] [--tanks-csv tanks.csv]
     python -m pyomo_studio export model.json model_script.py
     python -m pyomo_studio validate model.json
     python -m pyomo_studio solvers
@@ -42,6 +42,7 @@ def cmd_solve(args) -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
     schedules = {}
+    spec = result.spec or spec
     if result.ok:
         for sc in result.scenarios:
             try:
@@ -59,6 +60,16 @@ def cmd_solve(args) -> int:
     if args.csv:
         Path(args.csv).write_text(report.schedule_csv(schedules), encoding="utf-8")
         print(f"Schedule CSV written to {args.csv}")
+    if args.tanks_csv:
+        from . import inventory as INV
+        invs = INV.compute_all(spec, result)
+        if invs:
+            text = "".join(INV.inventory_csv(inv).split("\n", 1)[1] if i else INV.inventory_csv(inv)
+                           for i, inv in enumerate(invs))
+            Path(args.tanks_csv).write_text(text, encoding="utf-8")
+            print(f"Tank inventory CSV written to {args.tanks_csv}")
+        else:
+            print("WARNING: no tank farm layer, no tank CSV written.", file=sys.stderr)
     if args.json:
         Path(args.json).write_text(report.result_json(result, schedules), encoding="utf-8")
         print(f"Results JSON written to {args.json}")
@@ -111,6 +122,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--report", help="plan file (.html or .md)")
     s.add_argument("--csv", help="schedule CSV file")
     s.add_argument("--json", help="results JSON file")
+    s.add_argument("--tanks-csv", help="tank inventory CSV file (models with a tank farm layer)")
     s.add_argument("--solver", help="solver name, for example appsi_highs or cbc")
     s.add_argument("--time-limit", type=float)
     s.add_argument("--analyze", action="store_true", help="stochastic analysis: EVPI and VSS")

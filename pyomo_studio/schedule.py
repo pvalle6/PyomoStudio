@@ -328,7 +328,7 @@ def _assess(sched: Schedule, sv: dict) -> None:
 
 @dataclass
 class Prim:
-    kind: str                        # rect | line | poly | text
+    kind: str                        # rect | line | poly | path (open polyline) | text
     x: float = 0.0
     y: float = 0.0
     w: float = 0.0
@@ -607,6 +607,9 @@ def to_svg(prims: list[Prim], width: float, height: float) -> str:
         elif p.kind == "poly":
             pts = " ".join(f"{x:.1f},{y:.1f}" for x, y in p.points)
             out.append(f'<polygon points="{pts}" fill="{p.fill or "none"}" {style}>{tip}</polygon>')
+        elif p.kind == "path":
+            pts = " ".join(f"{x:.1f},{y:.1f}" for x, y in p.points)
+            out.append(f'<polyline points="{pts}" fill="none" stroke-linejoin="round" {style}>{tip}</polyline>')
         elif p.kind == "text":
             weight = ' font-weight="600"' if p.bold else ""
             out.append(f'<text x="{p.x:.1f}" y="{p.y:.1f}" font-size="{p.size:g}" fill="{p.color}" '

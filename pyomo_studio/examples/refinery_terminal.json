@@ -1,0 +1,314 @@
+{
+  "version": 1,
+  "name": "Crude terminal and refinery - berths, tanks, crude units",
+  "description": "Three linked layers on one 2 h time grid. Vessels discharge crude at two berths into dedicated tanks, and the tanks feed two crude distillation units. Turn layers off on the Layers page: the other layers then use their fallback data.",
+  "sets": [],
+  "params": [],
+  "variables": [],
+  "expressions": [],
+  "constraints": [],
+  "objectives": [],
+  "stochastic": {
+    "enabled": false,
+    "scenarios": [],
+    "risk": {
+      "measure": "expected",
+      "alpha": 0.9,
+      "weight": 0.0
+    }
+  },
+  "schedule": {
+    "type": "none",
+    "tasks": "",
+    "condition": "",
+    "label": "",
+    "resource": "",
+    "start": "",
+    "duration": "",
+    "release": "",
+    "due": "",
+    "position": "",
+    "size": "",
+    "space_label": "Position",
+    "space_max": "",
+    "time_unit": "h",
+    "time_origin": "",
+    "wait_warning": "",
+    "late_tolerance": "0.001"
+  },
+  "solver": {
+    "name": "appsi_highs",
+    "time_limit": 120.0,
+    "mip_gap": 0.001,
+    "tee": true,
+    "duals": false,
+    "options": ""
+  },
+  "hook": "",
+  "layers": {
+    "grid": {
+      "periods": 36,
+      "period_h": 2.0,
+      "grades": [
+        "LSW",
+        "ARL",
+        "HSR"
+      ],
+      "start": "2026-11-16 06:00"
+    },
+    "items": [
+      {
+        "id": "berth",
+        "type": "berth",
+        "name": "Berth allocation",
+        "enabled": true,
+        "weight": 1.0,
+        "config": {
+          "hookup_h": 2.0,
+          "release_h": 1.0,
+          "first_stage": true,
+          "vessels": [
+            {
+              "name": "V1",
+              "grade": "ARL",
+              "volume": 60000,
+              "arrival": 0,
+              "due": 20,
+              "pump_rate": 5000,
+              "length": 250,
+              "cost_h": 1500,
+              "late_cost": 4000
+            },
+            {
+              "name": "V2",
+              "grade": "LSW",
+              "volume": 45000,
+              "arrival": 3,
+              "due": 24,
+              "pump_rate": 4500,
+              "length": 230,
+              "cost_h": 1300,
+              "late_cost": 4000
+            },
+            {
+              "name": "V3",
+              "grade": "HSR",
+              "volume": 55000,
+              "arrival": 14,
+              "due": 36,
+              "pump_rate": 5000,
+              "length": 270,
+              "cost_h": 1600,
+              "late_cost": 4000
+            },
+            {
+              "name": "V4",
+              "grade": "ARL",
+              "volume": 60000,
+              "arrival": 26,
+              "due": 48,
+              "pump_rate": 5000,
+              "length": 250,
+              "cost_h": 1500,
+              "late_cost": 4000
+            },
+            {
+              "name": "V5",
+              "grade": "LSW",
+              "volume": 40000,
+              "arrival": 34,
+              "due": 56,
+              "pump_rate": 4000,
+              "length": 200,
+              "cost_h": 1200,
+              "late_cost": 4000
+            }
+          ],
+          "berths": [
+            {
+              "name": "B1",
+              "open": 0,
+              "max_rate": 6000,
+              "max_length": 300
+            },
+            {
+              "name": "B2",
+              "open": 0,
+              "max_rate": 4000,
+              "max_length": 240
+            }
+          ]
+        }
+      },
+      {
+        "id": "tank",
+        "type": "tank_farm",
+        "name": "Tank farm",
+        "enabled": true,
+        "weight": 1.0,
+        "config": {
+          "no_simultaneous": true,
+          "end_fraction": 0.8,
+          "hold_cost": 0.0,
+          "short_cost": 200.0,
+          "reject_cost": 1000.0,
+          "tanks": [
+            {
+              "name": "T101",
+              "grade": "LSW",
+              "capacity": 60000,
+              "heel": 4000,
+              "initial": 30000,
+              "in_rate": 6000,
+              "out_rate": 1500
+            },
+            {
+              "name": "T102",
+              "grade": "LSW",
+              "capacity": 60000,
+              "heel": 4000,
+              "initial": 15000,
+              "in_rate": 6000,
+              "out_rate": 1500
+            },
+            {
+              "name": "T201",
+              "grade": "ARL",
+              "capacity": 60000,
+              "heel": 5000,
+              "initial": 34000,
+              "in_rate": 6000,
+              "out_rate": 1500
+            },
+            {
+              "name": "T202",
+              "grade": "ARL",
+              "capacity": 60000,
+              "heel": 5000,
+              "initial": 24000,
+              "in_rate": 6000,
+              "out_rate": 1500
+            },
+            {
+              "name": "T301",
+              "grade": "HSR",
+              "capacity": 70000,
+              "heel": 5000,
+              "initial": 25000,
+              "in_rate": 6000,
+              "out_rate": 1500
+            },
+            {
+              "name": "T302",
+              "grade": "HSR",
+              "capacity": 70000,
+              "heel": 5000,
+              "initial": 10000,
+              "in_rate": 6000,
+              "out_rate": 1500
+            }
+          ],
+          "deliveries": [
+            {
+              "grade": "ARL",
+              "first": 2,
+              "last": 12,
+              "volume": 60000
+            },
+            {
+              "grade": "LSW",
+              "first": 4,
+              "last": 10,
+              "volume": 45000
+            },
+            {
+              "grade": "HSR",
+              "first": 10,
+              "last": 16,
+              "volume": 55000
+            },
+            {
+              "grade": "ARL",
+              "first": 16,
+              "last": 26,
+              "volume": 60000
+            },
+            {
+              "grade": "LSW",
+              "first": 20,
+              "last": 26,
+              "volume": 40000
+            }
+          ],
+          "demand": [
+            {
+              "grade": "LSW",
+              "rate": 650
+            },
+            {
+              "grade": "ARL",
+              "rate": 1200
+            },
+            {
+              "grade": "HSR",
+              "rate": 350
+            }
+          ]
+        }
+      },
+      {
+        "id": "cdu",
+        "type": "cdu",
+        "name": "Crude units",
+        "enabled": true,
+        "weight": 1.0,
+        "config": {
+          "ramp": 150.0,
+          "start_cost": 25000.0,
+          "initially_on": true,
+          "units": [
+            {
+              "name": "CDU1",
+              "min_rate": 600,
+              "max_rate": 1300,
+              "max_sulfur": 1.6
+            },
+            {
+              "name": "CDU2",
+              "min_rate": 400,
+              "max_rate": 900,
+              "max_sulfur": 2.4
+            }
+          ],
+          "crudes": [
+            {
+              "grade": "LSW",
+              "sulfur": 0.4,
+              "margin": 22,
+              "max_frac": 1.0,
+              "available": 800
+            },
+            {
+              "grade": "ARL",
+              "sulfur": 1.9,
+              "margin": 18,
+              "max_frac": 1.0,
+              "available": 1000
+            },
+            {
+              "grade": "HSR",
+              "sulfur": 2.9,
+              "margin": 26,
+              "max_frac": 0.35,
+              "available": 600
+            }
+          ]
+        }
+      }
+    ],
+    "objective": {
+      "name": "TotalCost",
+      "include_base": true
+    }
+  }
+}

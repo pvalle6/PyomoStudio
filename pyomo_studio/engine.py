@@ -370,6 +370,7 @@ def build(spec: dict, *, params: dict | None = None, deterministic: bool = False
     """
     require_pyomo()
     try:
+        spec = S.effective(spec)
         sets = S.resolve_sets(spec)
         dims = S.set_dims(spec, sets)
         obj_spec = _active_objective(spec)
@@ -736,6 +737,7 @@ class SolveResult:
     built: Built | None = None
     analysis: dict | None = None
     label: str = ""
+    spec: dict | None = None         # the flat spec that was built (layers composed)
 
     def scenario(self, name: str | None) -> ScenarioResult:
         for sc in self.scenarios:
@@ -866,7 +868,10 @@ def fix_values(built: Built, fixed: dict[str, dict]) -> None:
 
 
 def validate_or_raise(spec: dict) -> None:
-    rep = S.validate(spec)
+    try:
+        rep = S.validate(spec)
+    except S.SpecError as exc:
+        raise EngineError(str(exc)) from None
     if not rep.ok:
         raise EngineError("The model has errors:\n" + "\n".join(f"  - {i.where}: {i.message}" for i in rep.errors))
 
@@ -876,6 +881,7 @@ def solve(spec: dict, opts: SolverOptions | None = None, log: LogFn | None = Non
           fixed: dict | None = None, risk: dict | None = None, label: str = "") -> SolveResult:
     """Validate, build and solve *spec*. Raise ``EngineError`` on problems."""
     validate_or_raise(spec)
+    spec = S.effective(spec)
     opts = opts or SolverOptions.from_spec(spec["solver"])
     if log:
         log(f"Building model '{spec.get('name')}'{' - ' + label if label else ''} ...")
@@ -892,6 +898,7 @@ def solve(spec: dict, opts: SolverOptions | None = None, log: LogFn | None = Non
     run = run_solver(built, opts, log)
     res = _collect(built, spec, run, opts)
     res.label = label
+    res.spec = spec
     if log:
         log(f"{run.message} ({run.termination}, {run.wall_time:.2f} s)")
         if res.objective is not None:
@@ -902,6 +909,7 @@ def solve(spec: dict, opts: SolverOptions | None = None, log: LogFn | None = Non
 def build_summary(spec: dict, pprint_limit: int = 200_000) -> tuple[dict, str]:
     """Build the model without a solve. Return statistics and a model listing."""
     validate_or_raise(spec)
+    spec = S.effective(spec)
     built = build(spec)
     stats = model_stats(built, spec)
     buf = io.StringIO()
@@ -918,6 +926,7 @@ def build_summary(spec: dict, pprint_limit: int = 200_000) -> tuple[dict, str]:
 def write_model_file(spec: dict, path: str) -> None:
     """Write the built model to an LP, MPS, NL or GMS file (by extension)."""
     validate_or_raise(spec)
+    spec = S.effective(spec)
     built = build(spec)
     built.model.write(path, io_options={"symbolic_solver_labels": True})
 
@@ -939,6 +948,7 @@ def stochastic_analysis(spec: dict, opts: SolverOptions | None = None,
     (signs flip for a maximisation so that EVPI and VSS are not negative)
     """
     validate_or_raise(spec)
+    spec = S.effective(spec)
     if not spec["stochastic"].get("enabled"):
         raise EngineError("Turn on the stochastic model on the Uncertainty page first.")
     opts = opts or SolverOptions.from_spec(spec["solver"])

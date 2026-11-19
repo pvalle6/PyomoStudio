@@ -2,7 +2,7 @@
 
 A Windows 11 (Fluent 2) desktop workbench for Pyomo optimization models. You build sets, parameters, variables, constraints and objectives in forms, solve LP / MILP / NLP / MINLP models, add two-stage stochastic programming with a mean-CVaR risk measure, and get detailed plans with an ISA-101 schedule graphic.
 
-The worked example is the Berth Allocation Problem in three forms: discrete berths, a continuous quay, and uncertain arrivals.
+The worked example is the Berth Allocation Problem in three forms: discrete berths, a continuous quay, and uncertain arrivals. A second example links berths, an on-shore tank farm and crude distillation units as switchable layers.
 
 ## Install and run
 
@@ -18,8 +18,10 @@ On Windows you can also double-click `run_studio.bat`. You need Python 3.10 or l
 - **Model forms** for sets (list, range, Python expression), parameters (spreadsheet grid with Excel paste and CSV import, defaults, formulas), variables (domains, expression bounds, start values), named expressions, constraints (index, condition, relation), and multiple objectives (one optimized, the rest reported as KPIs).
 - **Expression language**: plain Pyomo/Python syntax, for example `sum(x[v, b] for b in B) == 1`, with `which()`, `value()`, `inequality()` and the Pyomo nonlinear functions.
 - **Solvers**: HiGHS, CBC, GLPK, Gurobi, CPLEX, Xpress, SCIP, Ipopt, Bonmin and Couenne, with a common time limit and MIP gap, free-form options, duals, and a live log. Solves run off the interface thread.
+- **Layers**: sub-models that you switch on and off, connected through ports on a shared time grid. Built-in layers: berth allocation, tank farm (receipt, storage, send-out) and crude distillation units (charge, blend, start-ups). When a partner layer is off, a layer uses its fallback data, so each layer also solves alone. Custom layers group form-built components, and new layer types are Python subclasses of `Layer`.
 - **Stochastic programming**: scenarios as parameter changes (set, add or scale, for one index or all), first- and second-stage variables, the extensive form with non-anticipativity, mean-CVaR, and an analysis that reports RP, WS, EV, EEV, EVPI and VSS.
 - **Schedule view**: map any solution to tasks as a Gantt chart (resource rows) or a space-time chart (for example quay position). The graphic follows ISA-101: a gray background, gray bars, and color only for abnormal states (red priority-1 for late or overlap, amber priority-2 for long waits), each repeated as a symbol and text.
+- **Tank schematic**: an ISA-101 process graphic of the tank farm for each period (receipt, tank levels and modes, send-out, crude unit blend), inventory trends with heel and capacity, and high-level, heel, reject and shortage indicators. It is also in the HTML plan and in a CSV.
 - **Plans**: an HTML report (Fluent styling with the embedded schedule graphic), Markdown, schedule CSV, values CSV and results JSON.
 - **Export**: a standalone, readable Pyomo script; LP, MPS and NL model files.
 - **Advanced hook**: Python code that runs on each model block, for Pyomo features the forms do not cover (GDP, piecewise).
@@ -40,10 +42,12 @@ pyomo_studio/
   spec.py       model file format, index parsing, data, scenarios, validation (no Pyomo needed)
   engine.py     Pyomo build, solve, extensive form, CVaR, EVPI/VSS analysis
   schedule.py   schedule view, ISA-101 layout, SVG
+  inventory.py  tank inventory data, schematic and trend layout
   report.py     HTML / Markdown / CSV / JSON plans
   codegen.py    standalone Pyomo script export
+  layers/       switchable layers: framework, berth, tank farm, crude units, custom
   gui/          Fluent 2 interface (theme, widgets, pages, window)
-  examples/     bap_discrete, bap_continuous, bap_stochastic, production_lp
+  examples/     bap_discrete, bap_continuous, bap_stochastic, production_lp, refinery_terminal
   docs/USER_GUIDE.md   user guide in ASD-STE100 Simplified Technical English
 ```
 

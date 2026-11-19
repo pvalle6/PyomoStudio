@@ -88,6 +88,7 @@ def _param_literal(val) -> str:
 
 
 def generate(spec: dict, fname: str = "model.py") -> str:
+    spec = S.effective(spec)
     sets = S.resolve_sets(spec)
     dims = S.set_dims(spec, sets)
     base = S.resolve_params(spec, sets)

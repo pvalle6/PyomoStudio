@@ -702,6 +702,124 @@ class ParamGrid(QTableWidget):
 # Schedule graphic (ISA-101)
 # ---------------------------------------------------------------------------
 
+def paint_prims(p: QPainter, prims: list[Prim]) -> None:
+    """Paint renderer-neutral primitives (schedule.Prim) with QPainter."""
+    for pr in prims:
+        pen = QPen(QColor(pr.stroke), pr.width) if pr.stroke else Qt.PenStyle.NoPen
+        if pr.stroke and pr.dash:
+            pen.setDashPattern([5 / max(pr.width, 1), 4 / max(pr.width, 1)])
+        if pr.kind == "rect":
+            p.setPen(pen)
+            p.setBrush(QColor(pr.fill) if pr.fill else Qt.BrushStyle.NoBrush)
+            p.drawRect(QRectF(pr.x, pr.y, pr.w, pr.h))
+        elif pr.kind == "line":
+            p.setPen(pen)
+            (xa, ya), (xb, yb) = pr.points[0], pr.points[1]
+            p.drawLine(QPointF(xa, ya), QPointF(xb, yb))
+        elif pr.kind == "poly":
+            p.setPen(pen)
+            p.setBrush(QColor(pr.fill) if pr.fill else Qt.BrushStyle.NoBrush)
+            p.drawPolygon(QPolygonF([QPointF(x, y) for x, y in pr.points]))
+        elif pr.kind == "path":
+            if isinstance(pen, QPen):
+                pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            p.setPen(pen)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawPolyline(QPolygonF([QPointF(x, y) for x, y in pr.points]))
+        elif pr.kind == "text":
+            f = font(int(round(pr.size)), 600 if pr.bold else 400)
+            p.setFont(f)
+            p.setPen(QColor(pr.color))
+            x = pr.x
+            if pr.anchor != "start":
+                w = QFontMetricsF(f).horizontalAdvance(pr.text)
+                x -= w / 2 if pr.anchor == "middle" else w
+            p.drawText(QPointF(x, pr.y), pr.text)
+
+
+def hit_prim(prims: list[Prim], pos) -> Prim | None:
+    """The top primitive with a tooltip under *pos*."""
+    x, y = pos.x(), pos.y()
+    for pr in reversed(prims):
+        if not pr.tip:
+            continue
+        if pr.kind == "rect" and pr.x <= x <= pr.x + pr.w and pr.y <= y <= pr.y + pr.h:
+            return pr
+        if pr.kind == "poly":
+            path = QPainterPath()
+            path.addPolygon(QPolygonF([QPointF(a, b) for a, b in pr.points]))
+            if path.contains(QPointF(x, y)):
+                return pr
+    return None
+
+
+class PrimView(QWidget):
+    """Shows a list of primitives; emits clicked(x, y) for interactive pictures."""
+    clicked = Signal(float, float)
+
+    def __init__(self, empty_text: str = "", parent=None):
+        super().__init__(parent)
+        self.setMouseTracking(True)
+        self.prims: list[Prim] = []
+        self.empty_text = empty_text
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
+        self.setFixedSize(600, 160)
+
+    def set_prims(self, prims: list[Prim], w: float, h: float) -> None:
+        self.prims = prims
+        self.setFixedSize(int(w), int(h))
+        self.update()
+
+    def clear(self, w: int = 600) -> None:
+        self.prims = []
+        self.setFixedSize(max(480, w), 160)
+        self.update()
+
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        p.fillRect(self.rect(), QColor(ISA["bg"]))
+        if not self.prims:
+            p.setPen(QColor(ISA["text_dim"]))
+            p.setFont(font(14))
+            p.drawText(self.rect().adjusted(16, 0, -16, 0), Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
+                       self.empty_text)
+        else:
+            paint_prims(p, self.prims)
+        p.end()
+
+    def mouseMoveEvent(self, e):
+        pr = hit_prim(self.prims, e.position())
+        if pr:
+            QToolTip.showText(e.globalPosition().toPoint(), pr.tip, self)
+        else:
+            QToolTip.hideText()
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit(e.position().x(), e.position().y())
+        super().mousePressEvent(e)
+
+
+class PrimScroll(QScrollArea):
+    """A scroll area with a PrimView; tells the owner when the width changes."""
+
+    def __init__(self, empty_text: str = "", on_width=None, parent=None):
+        super().__init__(parent)
+        self.view = PrimView(empty_text)
+        self.on_width = on_width
+        self.setWidget(self.view)
+        self.setWidgetResizable(False)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setStyleSheet(f"QScrollArea {{ background: {ISA['bg']}; border-radius: 4px; }}")
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if self.on_width:
+            self.on_width(self.viewport().width())
+
+
 class GanttView(QWidget):
     """Paints the renderer-neutral schedule primitives with QPainter."""
 
@@ -713,6 +831,7 @@ class GanttView(QWidget):
         self.avail_width = 1000
         self.prims: list[Prim] = []
         self.title = ""
+        self.empty_text = "No schedule. Solve a model that has a schedule view."
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
 
     def set_schedule(self, sched, title: str = "") -> None:
@@ -745,50 +864,14 @@ class GanttView(QWidget):
         if not self.prims:
             p.setPen(QColor(ISA["text_dim"]))
             p.setFont(font(14))
-            p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
-                       "No schedule. Solve a model that has a schedule view.")
+            p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self.empty_text)
             p.end()
             return
-        for pr in self.prims:
-            pen = QPen(QColor(pr.stroke), pr.width) if pr.stroke else Qt.PenStyle.NoPen
-            if pr.stroke and pr.dash:
-                pen.setDashPattern([5 / max(pr.width, 1), 4 / max(pr.width, 1)])
-            if pr.kind == "rect":
-                p.setPen(pen)
-                p.setBrush(QColor(pr.fill) if pr.fill else Qt.BrushStyle.NoBrush)
-                p.drawRect(QRectF(pr.x, pr.y, pr.w, pr.h))
-            elif pr.kind == "line":
-                p.setPen(pen)
-                (xa, ya), (xb, yb) = pr.points[0], pr.points[1]
-                p.drawLine(QPointF(xa, ya), QPointF(xb, yb))
-            elif pr.kind == "poly":
-                p.setPen(pen)
-                p.setBrush(QColor(pr.fill) if pr.fill else Qt.BrushStyle.NoBrush)
-                p.drawPolygon(QPolygonF([QPointF(x, y) for x, y in pr.points]))
-            elif pr.kind == "text":
-                f = font(int(round(pr.size)), 600 if pr.bold else 400)
-                p.setFont(f)
-                p.setPen(QColor(pr.color))
-                x = pr.x
-                if pr.anchor != "start":
-                    w = QFontMetricsF(f).horizontalAdvance(pr.text)
-                    x -= w / 2 if pr.anchor == "middle" else w
-                p.drawText(QPointF(x, pr.y), pr.text)
+        paint_prims(p, self.prims)
         p.end()
 
     def _hit(self, pos) -> Prim | None:
-        x, y = pos.x(), pos.y()
-        for pr in reversed(self.prims):
-            if not pr.tip:
-                continue
-            if pr.kind == "rect" and pr.x <= x <= pr.x + pr.w and pr.y <= y <= pr.y + pr.h:
-                return pr
-            if pr.kind == "poly":
-                path = QPainterPath()
-                path.addPolygon(QPolygonF([QPointF(a, b) for a, b in pr.points]))
-                if path.contains(QPointF(x, y)):
-                    return pr
-        return None
+        return hit_prim(self.prims, pos)
 
     def mouseMoveEvent(self, e):
         pr = self._hit(e.position())

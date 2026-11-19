@@ -163,6 +163,12 @@ def build_blocks(spec: dict, result, schedules: dict[str, Schedule | None],
         sec += 1
         b.extend(_schedule_blocks(sched))
 
+    for inv in _inventories(spec, result):
+        title = f"Tank inventory - {inv.layer}" + (f" - scenario {inv.scenario}" if result.stochastic else "")
+        b.append(Block("h2", f"{sec}. {title}"))
+        sec += 1
+        b.extend(_inventory_blocks(inv))
+
     b.append(Block("h2", f"{sec}. Decision variables"))
     sec += 1
     b.append(Block("p", "The table shows values that are not 0."))
@@ -195,6 +201,34 @@ def _analysis_blocks(a: dict) -> list[Block]:
     out.append(Block("table", headers=["Scenario", "Probability", "RP", "WS", "EEV"], rows=rows))
     for n in a.get("notes", []):
         out.append(Block("note", n, level="warning"))
+    return out
+
+
+def _inventories(spec: dict, result) -> list:
+    from . import inventory as INV
+    try:
+        return INV.compute_all(spec, result)
+    except Exception:   # a report must not fail because of the tank view
+        return []
+
+
+def _inventory_blocks(inv) -> list[Block]:
+    from . import inventory as INV
+    c = inv.counts()
+    src = {"berth": f"vessels (layer {inv.source_layer})", "fixed": "fixed deliveries (fallback)",
+           "layer": f"layer {inv.source_layer}"}[inv.source_kind]
+    snk = {"cdu": f"crude units (layer {inv.sink_layer})", "fixed": "fixed demand (fallback)",
+           "layer": f"layer {inv.sink_layer}"}[inv.sink_kind]
+    out = [_kv([("Tanks", str(len(inv.tanks))), ("Receipt from", src), ("Send-out to", snk),
+                ("Warnings", f"{c['warnings']} tank-periods (level >= {INV.HIGH_FRACTION:.0%} of capacity or at heel)"),
+                ("Alarms", str(c["alarms"]))])]
+    if c["alarms"]:
+        out.append(Block("note", "One or more alarms: a level outside its limits, a rejected delivery or an "
+                                 "unmet demand. Examine the tank data.", level="error"))
+    out.append(Block("p", "Stock of each tank at the end of each period. The dashed line is the heel. "
+                          "An amber band marks a warning period."))
+    out.append(Block("svg", INV.trends_svg(inv)))
+    out.append(Block("table", headers=INV.SUMMARY_HEADERS, rows=INV.summary_rows(inv)))
     return out
 
 
@@ -425,7 +459,7 @@ def to_markdown(blocks: list[Block]) -> str:
         elif b.kind == "kv":
             out.append("\n".join(f"- **{k}:** {v}" for k, v in b.items) + "\n")
         elif b.kind == "svg":
-            out.append("*(The schedule graphic is in the HTML report.)*\n")
+            out.append("*(The graphic is in the HTML report.)*\n")
         elif b.kind == "table":
             esc = lambda s: str(s).replace("|", "\\|")  # noqa: E731
             out.append("| " + " | ".join(esc(h) for h in b.headers) + " |")
