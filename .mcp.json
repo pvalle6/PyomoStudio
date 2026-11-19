@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "pyomo-studio": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "pyomo_studio", "mcp"]
+    }
+  }
+}

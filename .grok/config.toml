@@ -1,0 +1,10 @@
+# Project-scoped MCP: agents in this repo can drive Pyomo Studio.
+# Install the extra first:  python -m pip install -e ".[mcp]"
+# Grok user guide: ~/.grok/docs/user-guide/07-mcp-servers.md
+
+[mcp_servers.pyomo-studio]
+command = "python"
+args = ["-m", "pyomo_studio", "mcp"]
+startup_timeout_sec = 45
+tool_timeout_sec = 600
+tool_timeouts = { solve_model = 300, analyze_stochastic = 600, build_preview = 120, write_lp = 120 }
